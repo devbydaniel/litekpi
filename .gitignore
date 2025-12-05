@@ -1,0 +1,66 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor/
+/bin/
+go.work
+
+# Node
+node_modules/
+/dist/
+.vite/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.local
+
+# Build artifacts
+/build/
+/out/
+*.log
+tmp/
+.tmp/
+
+# Test coverage
+coverage/
+*.cover
+*.coverage
+.nyc_output/
+
+# Docker
+.docker/
+
+# Backend specific
+backend/tmp/
+backend/bin/
+
+# Frontend specific
+frontend/.cache/
+frontend/dist/

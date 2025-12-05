@@ -1,0 +1,50 @@
+# Air configuration for hot-reload during development
+# https://github.com/cosmtrek/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Build command
+  cmd = "go build -o ./tmp/main ./cmd/server"
+  # Binary file
+  bin = "./tmp/main"
+  # Watch these directories
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  # Exclude directories
+  exclude_dir = ["tmp", "vendor", "node_modules", "migrations"]
+  # Exclude files
+  exclude_file = []
+  # Exclude regex patterns
+  exclude_regex = ["_test.go"]
+  # Exclude unchanged files
+  exclude_unchanged = false
+  # Follow symlinks
+  follow_symlink = false
+  # Log file (empty = stdout)
+  log = ""
+  # Delay before rebuild after change detected (ms)
+  delay = 1000
+  # Stop running old binary when build error occurs
+  stop_on_error = true
+  # Send interrupt signal before killing process
+  send_interrupt = true
+  # Delay before sending signal (ms)
+  kill_delay = 500
+
+[color]
+  # Customize colors for output
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[log]
+  # Show log time
+  time = true
+  # Show main log or not
+  main_only = false
+
+[misc]
+  # Delete tmp directory on exit
+  clean_on_exit = true
