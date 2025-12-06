@@ -2,7 +2,8 @@
         migrate migrate-new migrate-down \
         test test-backend test-frontend \
         build build-backend build-frontend clean \
-        install fmt lint
+        install fmt lint \
+        swagger api-gen
 
 # Configuration
 DEV_COMPOSE := docker compose -f docker-compose.dev.yml
@@ -34,6 +35,10 @@ help:
 	@echo "  make build-backend    - Build backend binary"
 	@echo "  make build-frontend   - Build frontend assets"
 	@echo "  make clean            - Clean build artifacts"
+	@echo ""
+	@echo "API Generation:"
+	@echo "  make swagger          - Generate OpenAPI spec from Go"
+	@echo "  make api-gen          - Generate spec + TypeScript client"
 	@echo ""
 	@echo "Other:"
 	@echo "  make install          - Install dependencies"
@@ -138,3 +143,15 @@ fmt:
 lint:
 	cd backend && go vet ./...
 	cd frontend && npm run lint 2>/dev/null || true
+
+# =============================================================================
+# API Generation
+# =============================================================================
+
+# Generate Swagger/OpenAPI spec from Go annotations
+swagger:
+	cd backend && go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs --parseDependency
+
+# Generate TypeScript API client from OpenAPI spec
+api-gen: swagger
+	cd frontend && npm run generate:api

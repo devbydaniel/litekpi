@@ -1,3 +1,20 @@
+// @title Trackable API
+// @version 1.0
+// @description KPI tracking platform API
+//
+// @contact.name API Support
+// @contact.url https://github.com/trackable/trackable
+//
+// @license.name MIT
+//
+// @host localhost:8080
+// @BasePath /api/v1
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
 package main
 
 import (

@@ -107,3 +107,75 @@ export const api = {
     return request<T>(endpoint, { ...options, method: 'DELETE' })
   },
 }
+
+// Custom instance for Orval-generated clients
+export type CustomInstanceConfig<T> = {
+  url: string
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  params?: Record<string, string>
+  data?: unknown
+  headers?: Record<string, string>
+  signal?: AbortSignal
+}
+
+export const customInstance = async <T>({
+  url,
+  method,
+  params,
+  data,
+  headers,
+  signal,
+}: CustomInstanceConfig<T>): Promise<T> => {
+  const token = useAuthStore.getState().token
+
+  // Build URL with query params
+  let fullUrl = `${API_BASE_URL}${url}`
+  if (params) {
+    const searchParams = new URLSearchParams(params)
+    fullUrl += `?${searchParams.toString()}`
+  }
+
+  // Set headers
+  const requestHeaders = new Headers(headers)
+  if (!requestHeaders.has('Content-Type') && data) {
+    requestHeaders.set('Content-Type', 'application/json')
+  }
+  if (token) {
+    requestHeaders.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(fullUrl, {
+    method,
+    headers: requestHeaders,
+    body: data ? JSON.stringify(data) : undefined,
+    signal,
+  })
+
+  // Handle non-OK responses
+  if (!response.ok) {
+    let errorData: unknown
+    try {
+      errorData = await response.json()
+    } catch {
+      errorData = await response.text()
+    }
+
+    // Handle 401 by logging out
+    if (response.status === 401) {
+      useAuthStore.getState().logout()
+    }
+
+    throw new ApiError(
+      response.status,
+      `HTTP ${response.status}: ${response.statusText}`,
+      errorData
+    )
+  }
+
+  // Handle empty responses
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json()
+}

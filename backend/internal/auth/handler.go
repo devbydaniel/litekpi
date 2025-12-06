@@ -21,6 +21,18 @@ func NewHandler(service *Service) *Handler {
 }
 
 // Register handles user registration.
+//
+//	@Summary		Register a new user
+//	@Description	Create a new user account with email and password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		RegisterRequest		true	"Registration data"
+//	@Success		201		{object}	RegisterResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		409		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/auth/register [post]
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -59,6 +71,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login handles user login.
+//
+//	@Summary		Login user
+//	@Description	Authenticate user with email and password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		LoginRequest	true	"Login credentials"
+//	@Success		200		{object}	AuthResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -90,6 +115,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // VerifyEmail handles email verification.
+//
+//	@Summary		Verify email
+//	@Description	Verify user email address with token
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		VerifyEmailRequest	true	"Verification token"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/auth/verify-email [post]
 func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req VerifyEmailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -120,6 +156,16 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 // ForgotPassword handles password reset requests.
+//
+//	@Summary		Request password reset
+//	@Description	Send password reset email to user
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ForgotPasswordRequest	true	"User email"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Router			/auth/forgot-password [post]
 func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req ForgotPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -139,6 +185,17 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // ResetPassword handles password reset.
+//
+//	@Summary		Reset password
+//	@Description	Reset user password with token
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ResetPasswordRequest	true	"Reset token and new password"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/auth/reset-password [post]
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req ResetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -181,6 +238,16 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // ResendVerification handles resending verification emails.
+//
+//	@Summary		Resend verification email
+//	@Description	Resend email verification link to user
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ResendVerificationRequest	true	"User email"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Router			/auth/resend-verification [post]
 func (h *Handler) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	var req ResendVerificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -310,6 +377,15 @@ func (h *Handler) GithubCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // Me returns the current user.
+//
+//	@Summary		Get current user
+//	@Description	Get the currently authenticated user's profile
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	User
+//	@Failure		401	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/me [get]
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	user := UserFromContext(r.Context())
 	if user == nil {
@@ -321,6 +397,14 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout handles user logout (client-side token invalidation).
+//
+//	@Summary		Logout user
+//	@Description	Logout the current user (client should discard token)
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	MessageResponse
+//	@Security		BearerAuth
+//	@Router			/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, MessageResponse{Message: "Logged out successfully"})
 }

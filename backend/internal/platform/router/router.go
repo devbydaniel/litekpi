@@ -8,9 +8,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"github.com/trackable/trackable/internal/auth"
 	"github.com/trackable/trackable/internal/platform/config"
 	"github.com/trackable/trackable/internal/platform/database"
+
+	_ "github.com/trackable/trackable/docs" // Swagger docs
 )
 
 // New creates a new Chi router with middleware and routes configured.
@@ -50,6 +53,11 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 	// Health check endpoint
 	r.Get("/health", healthHandler(db))
+
+	// Swagger documentation
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {

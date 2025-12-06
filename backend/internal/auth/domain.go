@@ -90,6 +90,17 @@ type MessageResponse struct {
 	Message string `json:"message"`
 }
 
+// ErrorResponse represents an API error.
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+// RegisterResponse is the response body for successful registration.
+type RegisterResponse struct {
+	Message string `json:"message"`
+	User    User   `json:"user"`
+}
+
 // OAuthUserInfo represents user info from OAuth providers.
 type OAuthUserInfo struct {
 	ID    string
