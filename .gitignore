@@ -39,7 +39,6 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
-*.local
 
 # Build artifacts
 /build/
@@ -60,7 +59,13 @@ coverage/
 # Backend specific
 backend/tmp/
 backend/bin/
+backend/docs/
 
 # Frontend specific
 frontend/.cache/
 frontend/dist/
+frontend/.tanstack/
+frontend/src/routeTree.gen.ts
+frontend/src/shared/api/generated/
+frontend/vite.config.js
+frontend/vite.config.d.ts
