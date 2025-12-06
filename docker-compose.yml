@@ -1,26 +1,20 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
   db:
     image: postgres:15-alpine
     container_name: trackable-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: trackable
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: trackable
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-trackable}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-trackable}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trackable -d trackable"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trackable} -d ${POSTGRES_DB:-trackable}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # Go Backend (with hot-reload via Air)
   backend:
     build:
       context: ./backend
@@ -30,19 +24,19 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgres://trackable:secret@db:5432/trackable?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
-      APP_URL: http://localhost:5173
-      API_URL: http://localhost:8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-trackable}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trackable}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      APP_URL: ${APP_URL:?APP_URL required}
+      API_URL: ${API_URL:?API_URL required}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     depends_on:
       db:
         condition: service_healthy
-    # For development with hot-reload, uncomment below and use Air
-    # command: air -c .air.toml
-    # volumes:
-    #   - ./backend:/app
 
-  # React Frontend (Vite dev server)
   frontend:
     build:
       context: ./frontend
@@ -50,44 +44,9 @@ services:
     container_name: trackable-frontend
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "80:80"
     depends_on:
       - backend
-
-  # Development-only services below
-  # Uncomment for local development with hot-reload
-
-  # backend-dev:
-  #   image: cosmtrek/air
-  #   container_name: trackable-backend-dev
-  #   working_dir: /app
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     DATABASE_URL: postgres://trackable:secret@db:5432/trackable?sslmode=disable
-  #     JWT_SECRET: dev-secret-change-in-production
-  #     APP_URL: http://localhost:5173
-  #     API_URL: http://localhost:8080
-  #   volumes:
-  #     - ./backend:/app
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-
-  # frontend-dev:
-  #   image: node:20-alpine
-  #   container_name: trackable-frontend-dev
-  #   working_dir: /app
-  #   command: sh -c "npm install && npm run dev -- --host"
-  #   ports:
-  #     - "5173:5173"
-  #   environment:
-  #     - VITE_API_URL=http://localhost:8080
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   depends_on:
-  #     - backend-dev
 
 volumes:
   postgres_data:

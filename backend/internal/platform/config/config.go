@@ -1,82 +1,43 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"github.com/caarlos0/env/v11"
 )
 
 // Config holds all configuration for the application.
 type Config struct {
-	DatabaseURL string
-	JWTSecret   string
-	AppURL      string
-	APIURL      string
-	ServerPort  string
+	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://trackable:secret@localhost:5432/trackable?sslmode=disable"`
+	JWTSecret   string `env:"JWT_SECRET" envDefault:"your-secret-key-change-in-production"`
+	AppURL      string `env:"APP_URL" envDefault:"http://localhost:5173"`
+	APIURL      string `env:"API_URL" envDefault:"http://localhost:8080"`
+	ServerPort  string `env:"SERVER_PORT" envDefault:"8080"`
 
-	// SMTP settings
-	SMTP SMTPConfig
-
-	// OAuth settings
-	OAuth OAuthConfig
+	SMTP  SMTPConfig  `envPrefix:"SMTP_"`
+	OAuth OAuthConfig `envPrefix:"OAUTH_"`
 }
 
 // SMTPConfig holds email configuration.
 type SMTPConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	From     string
+	Host     string `env:"HOST"`
+	Port     int    `env:"PORT" envDefault:"587"`
+	User     string `env:"USER"`
+	Password string `env:"PASSWORD"`
+	From     string `env:"FROM"`
 }
 
 // OAuthConfig holds OAuth provider credentials.
 type OAuthConfig struct {
-	GoogleClientID     string
-	GoogleClientSecret string
-	GithubClientID     string
-	GithubClientSecret string
+	GoogleClientID     string `env:"GOOGLE_CLIENT_ID"`
+	GoogleClientSecret string `env:"GOOGLE_CLIENT_SECRET"`
+	GithubClientID     string `env:"GITHUB_CLIENT_ID"`
+	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET"`
 }
 
 // Load reads configuration from environment variables.
-func Load() *Config {
-	return &Config{
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://trackable:secret@localhost:5432/trackable?sslmode=disable"),
-		JWTSecret:   getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-		AppURL:      getEnv("APP_URL", "http://localhost:5173"),
-		APIURL:      getEnv("API_URL", "http://localhost:8080"),
-		ServerPort:  getEnv("SERVER_PORT", "8080"),
-
-		SMTP: SMTPConfig{
-			Host:     getEnv("SMTP_HOST", ""),
-			Port:     getEnvInt("SMTP_PORT", 587),
-			User:     getEnv("SMTP_USER", ""),
-			Password: getEnv("SMTP_PASSWORD", ""),
-			From:     getEnv("SMTP_FROM", ""),
-		},
-
-		OAuth: OAuthConfig{
-			GoogleClientID:     getEnv("OAUTH_GOOGLE_CLIENT_ID", ""),
-			GoogleClientSecret: getEnv("OAUTH_GOOGLE_CLIENT_SECRET", ""),
-			GithubClientID:     getEnv("OAUTH_GITHUB_CLIENT_ID", ""),
-			GithubClientSecret: getEnv("OAUTH_GITHUB_CLIENT_SECRET", ""),
-		},
+func Load() (*Config, error) {
+	cfg := &Config{}
+	if err := env.Parse(cfg); err != nil {
+		return nil, err
 	}
-}
-
-// getEnv returns the value of an environment variable or a default value.
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-// getEnvInt returns the integer value of an environment variable or a default value.
-func getEnvInt(key string, defaultValue int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
+	return cfg, nil
 }

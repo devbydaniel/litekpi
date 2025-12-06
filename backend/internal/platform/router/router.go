@@ -8,11 +8,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/trackable/trackable/internal/auth"
+	"github.com/trackable/trackable/internal/platform/config"
 	"github.com/trackable/trackable/internal/platform/database"
 )
 
 // New creates a new Chi router with middleware and routes configured.
-func New(db *database.DB, appURL string) *chi.Mux {
+func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -24,7 +26,7 @@ func New(db *database.DB, appURL string) *chi.Mux {
 
 	// CORS configuration
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{appURL},
+		AllowedOrigins:   []string{cfg.AppURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -32,18 +34,35 @@ func New(db *database.DB, appURL string) *chi.Mux {
 		MaxAge:           300,
 	}))
 
+	// Initialize auth module
+	authRepo := auth.NewRepository(db.Pool)
+	jwtService := auth.NewJWTService(cfg.JWTSecret)
+	emailService := auth.NewEmailService(auth.EmailConfig{
+		Host:     cfg.SMTP.Host,
+		Port:     cfg.SMTP.Port,
+		User:     cfg.SMTP.User,
+		Password: cfg.SMTP.Password,
+		From:     cfg.SMTP.From,
+		AppURL:   cfg.AppURL,
+	})
+	authService := auth.NewService(authRepo, jwtService, emailService, cfg)
+	authHandler := auth.NewHandler(authService)
+
 	// Health check endpoint
 	r.Get("/health", healthHandler(db))
 
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Placeholder for future routes
+		// API status endpoint
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusOK, map[string]string{
 				"message": "Trackable API v1",
 				"status":  "ok",
 			})
 		})
+
+		// Register auth routes
+		authHandler.RegisterRoutes(r, authService.Middleware)
 	})
 
 	return r

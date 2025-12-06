@@ -1,22 +1,12 @@
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect, Outlet } from '@tanstack/react-router'
 import { useAuthStore } from '@/shared/stores/auth-store'
 
 export const Route = createFileRoute('/_auth')({
   beforeLoad: () => {
     const { isAuthenticated } = useAuthStore.getState()
     if (isAuthenticated) {
-      throw redirect({ to: '/products' })
+      throw redirect({ to: '/' })
     }
   },
-  component: AuthLayout,
+  component: () => <Outlet />,
 })
-
-function AuthLayout() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50">
-      <div className="w-full max-w-md p-4">
-        <Outlet />
-      </div>
-    </div>
-  )
-}

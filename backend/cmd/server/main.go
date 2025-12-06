@@ -23,7 +23,10 @@ func main() {
 
 func run() error {
 	// Load configuration
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
 
 	// Create context that listens for shutdown signals
 	ctx, cancel := context.WithCancel(context.Background())
@@ -39,7 +42,7 @@ func run() error {
 	log.Println("Database connected successfully")
 
 	// Create router
-	r := router.New(db, cfg.AppURL)
+	r := router.New(db, cfg)
 
 	// Create HTTP server
 	server := &http.Server{
