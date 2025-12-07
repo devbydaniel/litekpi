@@ -61,7 +61,12 @@ dev-services:
 
 # Start backend with hot-reload
 dev-backend:
-	cd backend && DATABASE_URL="$(DATABASE_URL)" air
+	cd backend && \
+		DATABASE_URL="$(DATABASE_URL)" \
+		SMTP_HOST=localhost \
+		SMTP_PORT=1025 \
+		SMTP_FROM=noreply@trackable.local \
+		air
 
 # Start frontend with HMR
 dev-frontend:

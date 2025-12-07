@@ -1,5 +1,6 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '@/shared/stores/auth-store'
+import { authApi } from '@/shared/api/auth'
 
 interface AuthenticatedLayoutProps {
   children: React.ReactNode
@@ -7,6 +8,17 @@ interface AuthenticatedLayoutProps {
 
 export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    try {
+      await authApi.logout()
+    } catch {
+      // Continue with logout even if API call fails
+    }
+    logout()
+    navigate({ to: '/login' })
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -39,7 +51,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
                 <p className="text-sm font-medium">{user?.email}</p>
               </div>
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
                 Logout

@@ -109,7 +109,7 @@ export const api = {
 }
 
 // Custom instance for Orval-generated clients
-export type CustomInstanceConfig<T> = {
+export type CustomInstanceConfig = {
   url: string
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   params?: Record<string, string>
@@ -125,7 +125,7 @@ export const customInstance = async <T>({
   data,
   headers,
   signal,
-}: CustomInstanceConfig<T>): Promise<T> => {
+}: CustomInstanceConfig): Promise<T> => {
   const token = useAuthStore.getState().token
 
   // Build URL with query params

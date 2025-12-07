@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 )
@@ -60,6 +61,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusConflict, "email already exists")
 			return
 		}
+		log.Printf("registration error: %v", err)
 		respondError(w, http.StatusInternalServerError, "failed to register user")
 		return
 	}
