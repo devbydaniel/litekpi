@@ -24,7 +24,7 @@ func NewHandler(service *Service) *Handler {
 // Register handles user registration.
 //
 //	@Summary		Register a new user
-//	@Description	Create a new user account with email and password
+//	@Description	Create a new user account with email, password, name, and organization
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
@@ -52,6 +52,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Password) < 8 {
 		respondError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	if req.Name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.OrganizationName == "" {
+		respondError(w, http.StatusBadRequest, "organization name is required")
 		return
 	}
 
@@ -314,13 +322,13 @@ func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.service.HandleGoogleCallback(r.Context(), code)
+	result, err := h.service.HandleGoogleCallback(r.Context(), code)
 	if err != nil {
 		h.redirectWithError(w, r, "authentication failed")
 		return
 	}
 
-	h.redirectWithAuth(w, r, resp)
+	h.redirectWithOAuthResult(w, r, result)
 }
 
 // GithubAuth initiates GitHub OAuth flow.
@@ -369,13 +377,69 @@ func (h *Handler) GithubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.service.HandleGithubCallback(r.Context(), code)
+	result, err := h.service.HandleGithubCallback(r.Context(), code)
 	if err != nil {
 		h.redirectWithError(w, r, "authentication failed")
 		return
 	}
 
-	h.redirectWithAuth(w, r, resp)
+	h.redirectWithOAuthResult(w, r, result)
+}
+
+// CompleteOAuthSetup handles completing OAuth registration with org/name.
+//
+//	@Summary		Complete OAuth setup
+//	@Description	Complete OAuth registration by providing name and organization
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		CompleteOAuthSetupRequest	true	"Setup data"
+//	@Success		200		{object}	AuthResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		409		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/auth/complete-oauth-setup [post]
+func (h *Handler) CompleteOAuthSetup(w http.ResponseWriter, r *http.Request) {
+	var req CompleteOAuthSetupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Validate input
+	if req.Token == "" {
+		respondError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+	if req.Name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.OrganizationName == "" {
+		respondError(w, http.StatusBadRequest, "organization name is required")
+		return
+	}
+
+	resp, err := h.service.CompleteOAuthSetup(r.Context(), req)
+	if err != nil {
+		if errors.Is(err, ErrInvalidToken) {
+			respondError(w, http.StatusBadRequest, "invalid or expired setup token")
+			return
+		}
+		if errors.Is(err, ErrOAuthAccountNotFound) {
+			respondError(w, http.StatusBadRequest, "oauth account not found")
+			return
+		}
+		if errors.Is(err, ErrEmailAlreadyExists) {
+			respondError(w, http.StatusConflict, "email already exists")
+			return
+		}
+		log.Printf("complete oauth setup error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to complete setup")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, resp)
 }
 
 // Me returns the current user.
@@ -409,6 +473,21 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 //	@Router			/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, MessageResponse{Message: "Logged out successfully"})
+}
+
+func (h *Handler) redirectWithOAuthResult(w http.ResponseWriter, r *http.Request, result *OAuthResult) {
+	if result.PendingSetup != nil {
+		// Redirect to complete-setup page
+		redirectURL := h.service.GetAppURL() + "/auth/complete-setup" +
+			"?token=" + url.QueryEscape(result.PendingSetup.Token) +
+			"&email=" + url.QueryEscape(result.PendingSetup.Email) +
+			"&name=" + url.QueryEscape(result.PendingSetup.ProviderName)
+		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Existing user - redirect with auth
+	h.redirectWithAuth(w, r, result.AuthResponse)
 }
 
 func (h *Handler) redirectWithAuth(w http.ResponseWriter, r *http.Request, resp *AuthResponse) {

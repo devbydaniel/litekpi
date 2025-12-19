@@ -6,25 +6,46 @@ import (
 	"github.com/google/uuid"
 )
 
+// Role represents user roles within an organization.
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleEditor Role = "editor"
+	RoleViewer Role = "viewer"
+)
+
+// Organization represents an organization in the system.
+type Organization struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // User represents a user in the system.
 type User struct {
-	ID            uuid.UUID  `json:"id"`
-	Email         string     `json:"email"`
-	PasswordHash  *string    `json:"-"`
-	EmailVerified bool       `json:"emailVerified"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	ID             uuid.UUID     `json:"id"`
+	Email          string        `json:"email"`
+	Name           string        `json:"name"`
+	PasswordHash   *string       `json:"-"`
+	EmailVerified  bool          `json:"emailVerified"`
+	OrganizationID uuid.UUID     `json:"organizationId"`
+	Organization   *Organization `json:"organization,omitempty"`
+	Role           Role          `json:"role"`
+	CreatedAt      time.Time     `json:"createdAt"`
+	UpdatedAt      time.Time     `json:"updatedAt"`
 }
 
 // OAuthAccount represents a linked OAuth provider account.
 type OAuthAccount struct {
 	ID             uuid.UUID
-	UserID         uuid.UUID
+	UserID         *uuid.UUID // Nullable until setup complete
 	Provider       string
 	ProviderUserID string
 	ProviderEmail  string
+	ProviderName   string
 	CreatedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 // EmailVerificationToken represents a token for email verification.
@@ -48,8 +69,10 @@ type PasswordResetToken struct {
 
 // RegisterRequest is the request body for user registration.
 type RegisterRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	Name             string `json:"name"`
+	OrganizationName string `json:"organizationName"`
 }
 
 // LoginRequest is the request body for user login.
@@ -106,4 +129,19 @@ type OAuthUserInfo struct {
 	ID    string
 	Email string
 	Name  string
+}
+
+// CompleteOAuthSetupRequest is the request body for completing OAuth registration.
+type CompleteOAuthSetupRequest struct {
+	Token            string `json:"token"`
+	Name             string `json:"name"`
+	OrganizationName string `json:"organizationName"`
+}
+
+// OAuthPendingSetupResponse is returned when OAuth user needs to complete setup.
+type OAuthPendingSetupResponse struct {
+	PendingSetup bool   `json:"pendingSetup"`
+	Token        string `json:"token"`
+	Email        string `json:"email"`
+	ProviderName string `json:"providerName,omitempty"`
 }

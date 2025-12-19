@@ -28,13 +28,14 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrTokenExpired       = errors.New("token has expired")
 	ErrTokenUsed          = errors.New("token has already been used")
+	ErrOAuthAccountNotFound = errors.New("oauth account not found")
 )
 
 const (
-	bcryptCost                     = 12
-	verificationTokenExpiry        = 24 * time.Hour
-	passwordResetTokenExpiry       = 1 * time.Hour
-	tokenLength                    = 32
+	bcryptCost               = 12
+	verificationTokenExpiry  = 24 * time.Hour
+	passwordResetTokenExpiry = 1 * time.Hour
+	tokenLength              = 32
 )
 
 // Service handles authentication business logic.
@@ -81,7 +82,7 @@ func NewService(repo *Repository, jwt *JWTService, email *EmailService, cfg *con
 	return svc
 }
 
-// Register creates a new user with email and password.
+// Register creates a new user with email, password, name, and organization.
 func (s *Service) Register(ctx context.Context, req RegisterRequest) (*User, error) {
 	// Check if email already exists
 	existingUser, err := s.repo.GetUserByEmail(ctx, strings.ToLower(req.Email))
@@ -99,8 +100,8 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*User, err
 	}
 	passwordHash := string(hashedPassword)
 
-	// Create user
-	user, err := s.repo.CreateUser(ctx, strings.ToLower(req.Email), &passwordHash)
+	// Create organization and user in a transaction
+	user, err := s.repo.CreateUserWithOrg(ctx, strings.ToLower(req.Email), req.Name, &passwordHash, req.OrganizationName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -138,7 +139,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, e
 	}
 
 	// Generate token
-	token, err := s.jwt.GenerateToken(user.ID, user.Email)
+	token, err := s.jwt.GenerateToken(user.ID, user.Email, user.OrganizationID, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -325,8 +326,16 @@ func (s *Service) IsGithubOAuthEnabled() bool {
 	return s.githubOAuth != nil
 }
 
+// OAuthResult represents the result of an OAuth callback.
+type OAuthResult struct {
+	// If user exists, AuthResponse is set
+	AuthResponse *AuthResponse
+	// If user needs setup, PendingSetup is set
+	PendingSetup *OAuthPendingSetupResponse
+}
+
 // HandleGoogleCallback processes the Google OAuth callback.
-func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (*AuthResponse, error) {
+func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (*OAuthResult, error) {
 	if s.googleOAuth == nil {
 		return nil, errors.New("google oauth not configured")
 	}
@@ -347,7 +356,7 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (*AuthR
 }
 
 // HandleGithubCallback processes the GitHub OAuth callback.
-func (s *Service) HandleGithubCallback(ctx context.Context, code string) (*AuthResponse, error) {
+func (s *Service) HandleGithubCallback(ctx context.Context, code string) (*OAuthResult, error) {
 	if s.githubOAuth == nil {
 		return nil, errors.New("github oauth not configured")
 	}
@@ -460,61 +469,152 @@ func (s *Service) getGithubUserInfo(ctx context.Context, token *oauth2.Token) (*
 	}, nil
 }
 
-func (s *Service) handleOAuthUser(ctx context.Context, provider string, userInfo *OAuthUserInfo) (*AuthResponse, error) {
+func (s *Service) handleOAuthUser(ctx context.Context, provider string, userInfo *OAuthUserInfo) (*OAuthResult, error) {
 	// Check if OAuth account exists
 	oauthAccount, err := s.repo.GetOAuthAccount(ctx, provider, userInfo.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get oauth account: %w", err)
 	}
 
-	var user *User
-
-	if oauthAccount != nil {
-		// Get existing user
-		user, err = s.repo.GetUserByID(ctx, oauthAccount.UserID)
+	// If OAuth account exists and has a linked user, log them in
+	if oauthAccount != nil && oauthAccount.UserID != nil {
+		user, err := s.repo.GetUserByID(ctx, *oauthAccount.UserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
-	} else {
-		// Check if user with this email exists
-		user, err = s.repo.GetUserByEmail(ctx, strings.ToLower(userInfo.Email))
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user by email: %w", err)
-		}
-
 		if user == nil {
-			// Create new user (no password, OAuth only)
-			user, err = s.repo.CreateUser(ctx, strings.ToLower(userInfo.Email), nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create user: %w", err)
-			}
+			return nil, ErrUserNotFound
 		}
 
-		// Mark email as verified (OAuth provider verified it)
-		if !user.EmailVerified {
-			if err := s.repo.UpdateUserEmailVerified(ctx, user.ID, true); err != nil {
-				return nil, fmt.Errorf("failed to verify email: %w", err)
-			}
-			user.EmailVerified = true
+		// Generate JWT token
+		jwtToken, err := s.jwt.GenerateToken(user.ID, user.Email, user.OrganizationID, user.Role)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate token: %w", err)
 		}
 
-		// Create OAuth account link
-		oauthAccount = &OAuthAccount{
+		return &OAuthResult{
+			AuthResponse: &AuthResponse{
+				User:  *user,
+				Token: jwtToken,
+			},
+		}, nil
+	}
+
+	// Check if user with this email exists (link OAuth to existing user)
+	existingUser, err := s.repo.GetUserByEmail(ctx, strings.ToLower(userInfo.Email))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	if existingUser != nil {
+		// Link OAuth account to existing user
+		newOAuthAccount := &OAuthAccount{
 			ID:             uuid.New(),
-			UserID:         user.ID,
+			UserID:         &existingUser.ID,
 			Provider:       provider,
 			ProviderUserID: userInfo.ID,
 			ProviderEmail:  userInfo.Email,
+			ProviderName:   userInfo.Name,
 			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
 		}
-		if err := s.repo.CreateOAuthAccount(ctx, oauthAccount); err != nil {
+		if err := s.repo.CreateOAuthAccount(ctx, newOAuthAccount); err != nil {
 			return nil, fmt.Errorf("failed to create oauth account: %w", err)
 		}
+
+		// Mark email as verified (OAuth provider verified it)
+		if !existingUser.EmailVerified {
+			if err := s.repo.UpdateUserEmailVerified(ctx, existingUser.ID, true); err != nil {
+				return nil, fmt.Errorf("failed to verify email: %w", err)
+			}
+			existingUser.EmailVerified = true
+		}
+
+		// Generate JWT token
+		jwtToken, err := s.jwt.GenerateToken(existingUser.ID, existingUser.Email, existingUser.OrganizationID, existingUser.Role)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate token: %w", err)
+		}
+
+		return &OAuthResult{
+			AuthResponse: &AuthResponse{
+				User:  *existingUser,
+				Token: jwtToken,
+			},
+		}, nil
+	}
+
+	// New OAuth user - create pending OAuth account and require setup
+	pendingAccount, err := s.repo.CreatePendingOAuthAccount(ctx, provider, userInfo.ID, userInfo.Email, userInfo.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pending oauth account: %w", err)
+	}
+
+	// Generate short-lived setup token
+	setupToken, err := s.jwt.GenerateOAuthSetupToken(pendingAccount.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate setup token: %w", err)
+	}
+
+	return &OAuthResult{
+		PendingSetup: &OAuthPendingSetupResponse{
+			PendingSetup: true,
+			Token:        setupToken,
+			Email:        userInfo.Email,
+			ProviderName: userInfo.Name,
+		},
+	}, nil
+}
+
+// CompleteOAuthSetup finishes OAuth registration by creating org and user.
+func (s *Service) CompleteOAuthSetup(ctx context.Context, req CompleteOAuthSetupRequest) (*AuthResponse, error) {
+	// Validate setup token
+	oauthAccountID, err := s.jwt.ValidateOAuthSetupToken(req.Token)
+	if err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	// Get pending OAuth account
+	oauthAccount, err := s.repo.GetOAuthAccountByID(ctx, oauthAccountID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oauth account: %w", err)
+	}
+	if oauthAccount == nil {
+		return nil, ErrOAuthAccountNotFound
+	}
+
+	// Check if already linked to a user
+	if oauthAccount.UserID != nil {
+		return nil, errors.New("oauth account already linked to a user")
+	}
+
+	// Check if email already exists
+	existingUser, err := s.repo.GetUserByEmail(ctx, strings.ToLower(oauthAccount.ProviderEmail))
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing user: %w", err)
+	}
+	if existingUser != nil {
+		return nil, ErrEmailAlreadyExists
+	}
+
+	// Create organization and user (no password for OAuth users)
+	user, err := s.repo.CreateUserWithOrg(ctx, strings.ToLower(oauthAccount.ProviderEmail), req.Name, nil, req.OrganizationName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Mark email as verified (OAuth provider verified it)
+	if err := s.repo.UpdateUserEmailVerified(ctx, user.ID, true); err != nil {
+		return nil, fmt.Errorf("failed to verify email: %w", err)
+	}
+	user.EmailVerified = true
+
+	// Link OAuth account to user
+	if err := s.repo.LinkOAuthAccountToUser(ctx, oauthAccount.ID, user.ID); err != nil {
+		return nil, fmt.Errorf("failed to link oauth account: %w", err)
 	}
 
 	// Generate JWT token
-	jwtToken, err := s.jwt.GenerateToken(user.ID, user.Email)
+	jwtToken, err := s.jwt.GenerateToken(user.ID, user.Email, user.OrganizationID, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}

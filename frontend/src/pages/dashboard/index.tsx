@@ -1,5 +1,6 @@
 import { AuthenticatedLayout } from '@/layouts/authenticated'
 import { Card, CardContent } from '@/shared/components/ui/card'
+import { EmptyState } from '@/shared/components/ui/empty-state'
 import { useAuthStore } from '@/shared/stores/auth-store'
 
 export function DashboardPage() {
@@ -17,18 +18,12 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-dashed">
-          <CardContent className="flex min-h-[400px] flex-col items-center justify-center p-8 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <span className="text-2xl">📊</span>
-            </div>
-            <h3 className="mt-4 text-lg font-semibold">Coming soon</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Product management and KPI tracking features are under
-              development.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon="📊"
+          title="Coming soon"
+          description="Product management and KPI tracking features are under development."
+          className="min-h-[400px]"
+        />
       </div>
     </AuthenticatedLayout>
   )

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "prettier-plugin-tailwind": "^2.2.12"
+  }
+}

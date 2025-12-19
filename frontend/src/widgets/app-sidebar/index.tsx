@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { LayoutDashboard, LogOut } from 'lucide-react'
+import { LayoutDashboard, LogOut, Package } from 'lucide-react'
 import { useAuthStore } from '@/shared/stores/auth-store'
 import { authApi } from '@/shared/api/auth'
 import {
@@ -31,9 +31,12 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <Link to="/" className="flex items-center gap-2 px-2 py-1 font-semibold">
+        <Link
+          to="/"
+          className="flex items-center gap-2 px-2 py-1 font-semibold"
+        >
           <span className="text-xl">📊</span>
-          <span>LiteKPI</span>
+          <span className="font-heading">LiteKPI</span>
         </Link>
       </SidebarHeader>
 
@@ -46,6 +49,14 @@ export function AppSidebar() {
                   <Link to="/">
                     <LayoutDashboard className="size-4" />
                     <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Products">
+                  <Link to="/products">
+                    <Package className="size-4" />
+                    <span>Products</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

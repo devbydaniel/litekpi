@@ -19,7 +19,7 @@ export interface PaginatedResponse<T> {
 export interface Product {
   id: string
   name: string
-  ownerId: string
+  organizationId: string
   createdAt: string
   updatedAt: string
 }

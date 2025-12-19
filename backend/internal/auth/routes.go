@@ -16,6 +16,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(next http.Han
 		r.Post("/forgot-password", h.ForgotPassword)
 		r.Post("/reset-password", h.ResetPassword)
 		r.Post("/resend-verification", h.ResendVerification)
+		r.Post("/complete-oauth-setup", h.CompleteOAuthSetup)
 
 		// OAuth routes
 		r.Get("/google", h.GoogleAuth)

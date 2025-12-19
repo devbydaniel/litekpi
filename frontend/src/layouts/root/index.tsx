@@ -8,7 +8,7 @@ export function RootLayout({ children }: RootLayoutProps) {
   return (
     <>
       {children}
-      {import.meta.env.DEV && <TanStackRouterDevtools />}
+      {false && import.meta.env.DEV && <TanStackRouterDevtools />}
     </>
   )
 }

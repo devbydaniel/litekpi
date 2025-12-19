@@ -1,11 +1,25 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export type Role = 'admin' | 'editor' | 'viewer'
+
+export interface Organization {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface User {
   id: string
   email: string
+  name: string
   emailVerified: boolean
+  organizationId: string
+  organization?: Organization
+  role: Role
   createdAt: string
+  updatedAt: string
 }
 
 interface AuthState {

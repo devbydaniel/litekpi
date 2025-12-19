@@ -10,8 +10,10 @@ import (
 	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"github.com/devbydaniel/litekpi/internal/auth"
+	"github.com/devbydaniel/litekpi/internal/ingest"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
+	"github.com/devbydaniel/litekpi/internal/product"
 
 	_ "github.com/devbydaniel/litekpi/docs" // Swagger docs
 )
@@ -31,7 +33,7 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{cfg.AppURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -50,6 +52,16 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	})
 	authService := auth.NewService(authRepo, jwtService, emailService, cfg)
 	authHandler := auth.NewHandler(authService)
+
+	// Initialize product module
+	productRepo := product.NewRepository(db.Pool)
+	productService := product.NewService(productRepo)
+	productHandler := product.NewHandler(productService)
+
+	// Initialize ingest module
+	ingestRepo := ingest.NewRepository(db.Pool)
+	ingestService := ingest.NewService(ingestRepo, productRepo)
+	ingestHandler := ingest.NewHandler(ingestService)
 
 	// Health check endpoint
 	r.Get("/health", healthHandler(db))
@@ -71,6 +83,12 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 		// Register auth routes
 		authHandler.RegisterRoutes(r, authService.Middleware)
+
+		// Register product routes
+		productHandler.RegisterRoutes(r, authService.Middleware)
+
+		// Register ingest routes (uses API key auth, not JWT)
+		ingestHandler.RegisterRoutes(r, productRepo)
 	})
 
 	return r

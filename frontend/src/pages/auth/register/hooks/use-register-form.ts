@@ -7,6 +7,8 @@ import { ApiError } from '@/shared/api/client'
 
 const registerSchema = z
   .object({
+    name: z.string().min(1, 'Name is required').max(255, 'Name is too long'),
+    organizationName: z.string().min(1, 'Organization name is required').max(255, 'Organization name is too long'),
     email: z.string().email('Please enter a valid email'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
@@ -26,6 +28,8 @@ export function useRegisterForm() {
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
+      name: '',
+      organizationName: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -37,7 +41,12 @@ export function useRegisterForm() {
     setIsLoading(true)
 
     try {
-      await authApi.register({ email: values.email, password: values.password })
+      await authApi.register({
+        email: values.email,
+        password: values.password,
+        name: values.name,
+        organizationName: values.organizationName,
+      })
       setSuccess(true)
     } catch (err) {
       if (err instanceof ApiError) {
