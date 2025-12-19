@@ -6,7 +6,7 @@ export function DashboardPage() {
   const user = useAuthStore((state) => state.user)
 
   return (
-    <AuthenticatedLayout>
+    <AuthenticatedLayout title="Dashboard">
       <div className="space-y-6">
         <Card>
           <CardContent className="p-4">
@@ -16,13 +16,6 @@ export function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-
-        <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Your KPI tracking overview
-          </p>
-        </div>
 
         <Card className="border-dashed">
           <CardContent className="flex min-h-[400px] flex-col items-center justify-center p-8 text-center">

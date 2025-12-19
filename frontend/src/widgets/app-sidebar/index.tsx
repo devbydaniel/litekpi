@@ -29,8 +29,8 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar variant="floating">
-      <SidebarHeader className="border-b border-sidebar-border">
+    <Sidebar>
+      <SidebarHeader>
         <Link to="/" className="flex items-center gap-2 px-2 py-1 font-semibold">
           <span className="text-xl">📊</span>
           <span>LiteKPI</span>
