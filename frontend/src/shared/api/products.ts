@@ -23,8 +23,16 @@ export const productsApi = {
     return api.get('/products')
   },
 
+  get(id: string): Promise<Product> {
+    return api.get(`/products/${id}`)
+  },
+
   create(data: CreateProductRequest): Promise<CreateProductResponse> {
     return api.post('/products', data)
+  },
+
+  createDemo(): Promise<CreateProductResponse> {
+    return api.post('/products/demo')
   },
 
   delete(id: string): Promise<void> {

@@ -50,6 +50,19 @@ export function useProducts() {
     },
   })
 
+  const createDemoMutation = useMutation({
+    mutationFn: productsApi.createDemo,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      setApiKey(response.apiKey)
+      setCreateDialogOpen(true)
+      toast.success('Demo product created successfully')
+    },
+    onError: () => {
+      toast.error('Failed to create demo product')
+    },
+  })
+
   const handleCreateProduct = async (name: string) => {
     await createMutation.mutateAsync({ name })
   }
@@ -69,6 +82,10 @@ export function useProducts() {
     }
   }
 
+  const handleCreateDemo = async () => {
+    await createDemoMutation.mutateAsync()
+  }
+
   const closeDialogs = () => {
     setCreateDialogOpen(false)
     setRegenerateDialogOpen(false)
@@ -85,8 +102,10 @@ export function useProducts() {
     selectedProduct,
     apiKey,
     isCreating: createMutation.isPending,
+    isCreatingDemo: createDemoMutation.isPending,
     isRegenerating: regenerateMutation.isPending,
     handleCreateProduct,
+    handleCreateDemo,
     handleDeleteProduct,
     handleRegenerateKey,
     confirmRegenerateKey,

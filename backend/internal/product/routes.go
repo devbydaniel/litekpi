@@ -12,6 +12,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(next http.Han
 		r.Use(authMiddleware)
 		r.Get("/", h.ListProducts)
 		r.Post("/", h.CreateProduct)
+		r.Get("/{id}", h.GetProduct)
 		r.Delete("/{id}", h.DeleteProduct)
 		r.Post("/{id}/regenerate-key", h.RegenerateAPIKey)
 	})

@@ -7,25 +7,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/devbydaniel/litekpi/internal/product"
 )
 
-// Service handles metric ingestion business logic.
+// Service handles measurement ingestion business logic.
 type Service struct {
-	repo        *Repository
-	productRepo *product.Repository
+	repo *Repository
 }
 
 // NewService creates a new ingest service.
-func NewService(repo *Repository, productRepo *product.Repository) *Service {
-	return &Service{
-		repo:        repo,
-		productRepo: productRepo,
-	}
+func NewService(repo *Repository) *Service {
+	return &Service{repo: repo}
 }
 
-// IngestSingle validates and ingests a single metric.
+// IngestSingle validates and ingests a single measurement.
 func (s *Service) IngestSingle(ctx context.Context, productID uuid.UUID, req IngestRequest) (*IngestResponse, error) {
 	// Validate metric name
 	if err := validateMetricName(req.Name); err != nil {
@@ -48,34 +42,34 @@ func (s *Service) IngestSingle(ctx context.Context, productID uuid.UUID, req Ing
 		return nil, err
 	}
 
-	// Create metric
-	metric, err := s.repo.CreateMetric(ctx, productID, req.Name, req.Value, timestamp, req.Metadata)
+	// Create measurement
+	measurement, err := s.repo.CreateMeasurement(ctx, productID, req.Name, req.Value, timestamp, req.Metadata)
 	if err != nil {
 		return nil, err
 	}
 
 	return &IngestResponse{
-		ID:        metric.ID,
-		Name:      metric.Name,
-		Value:     metric.Value,
-		Timestamp: metric.Timestamp,
-		Metadata:  metric.Metadata,
+		ID:        measurement.ID,
+		Name:      measurement.Name,
+		Value:     measurement.Value,
+		Timestamp: measurement.Timestamp,
+		Metadata:  measurement.Metadata,
 	}, nil
 }
 
-// IngestBatch validates and ingests multiple metrics atomically.
+// IngestBatch validates and ingests multiple measurements atomically.
 func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req BatchIngestRequest) (*BatchIngestResponse, error) {
 	// Validate batch size
 	if len(req.Metrics) == 0 {
 		return nil, &validationError{
 			errorType: "validation_failed",
-			message:   "Batch must contain at least one metric",
+			message:   "Batch must contain at least one measurement",
 		}
 	}
 	if len(req.Metrics) > MaxBatchSize {
 		return nil, &validationError{
 			errorType: "validation_failed",
-			message:   fmt.Sprintf("Batch exceeds maximum size of %d metrics", MaxBatchSize),
+			message:   fmt.Sprintf("Batch exceeds maximum size of %d measurements", MaxBatchSize),
 		}
 	}
 
@@ -88,7 +82,7 @@ func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req Batc
 		if err := validateMetricName(m.Name); err != nil {
 			return nil, &validationError{
 				errorType: "validation_failed",
-				message:   fmt.Sprintf("Metric at index %d: %s", i, err.Error()),
+				message:   fmt.Sprintf("Measurement at index %d: %s", i, err.Error()),
 			}
 		}
 
@@ -96,7 +90,7 @@ func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req Batc
 		if err := validateValue(m.Value); err != nil {
 			return nil, &validationError{
 				errorType: "validation_failed",
-				message:   fmt.Sprintf("Metric at index %d: %s", i, err.Error()),
+				message:   fmt.Sprintf("Measurement at index %d: %s", i, err.Error()),
 			}
 		}
 
@@ -105,7 +99,7 @@ func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req Batc
 		if err != nil {
 			return nil, &validationError{
 				errorType: "validation_failed",
-				message:   fmt.Sprintf("Metric at index %d: %s", i, err.Error()),
+				message:   fmt.Sprintf("Measurement at index %d: %s", i, err.Error()),
 			}
 		}
 		timestamps[i] = ts
@@ -114,7 +108,7 @@ func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req Batc
 		if err := validateMetadata(m.Metadata); err != nil {
 			return nil, &validationError{
 				errorType: "validation_failed",
-				message:   fmt.Sprintf("Metric at index %d: %s", i, err.Error()),
+				message:   fmt.Sprintf("Measurement at index %d: %s", i, err.Error()),
 			}
 		}
 
@@ -123,14 +117,14 @@ func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req Batc
 		if prevIdx, exists := seen[key]; exists {
 			return nil, &validationError{
 				errorType: "validation_failed",
-				message:   fmt.Sprintf("Batch contains duplicate metrics (same name and timestamp) at indices %d and %d", prevIdx, i),
+				message:   fmt.Sprintf("Batch contains duplicate measurements (same name and timestamp) at indices %d and %d", prevIdx, i),
 			}
 		}
 		seen[key] = i
 	}
 
-	// Insert all metrics
-	count, err := s.repo.CreateMetricsBatch(ctx, productID, req.Metrics, timestamps)
+	// Insert all measurements
+	count, err := s.repo.CreateMeasurementsBatch(ctx, productID, req.Metrics, timestamps)
 	if err != nil {
 		return nil, err
 	}
@@ -241,4 +235,19 @@ func validateMetadata(metadata map[string]string) error {
 	}
 
 	return nil
+}
+
+// GetMeasurementNames retrieves distinct measurement names with their metadata keys for a product.
+func (s *Service) GetMeasurementNames(ctx context.Context, productID uuid.UUID) ([]MeasurementSummary, error) {
+	return s.repo.GetMeasurementNames(ctx, productID)
+}
+
+// GetMetadataValues retrieves all unique metadata key-value combinations for a specific measurement.
+func (s *Service) GetMetadataValues(ctx context.Context, productID uuid.UUID, measurementName string) ([]MetadataValues, error) {
+	return s.repo.GetMetadataValues(ctx, productID, measurementName)
+}
+
+// GetAggregatedMeasurements retrieves daily aggregated values with optional metadata filtering.
+func (s *Service) GetAggregatedMeasurements(ctx context.Context, productID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string) ([]AggregatedDataPoint, error) {
+	return s.repo.GetAggregatedMeasurements(ctx, productID, name, startDate, endDate, metadataFilters)
 }

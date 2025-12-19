@@ -50,6 +50,51 @@ func (h *Handler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, ListProductsResponse{Products: products})
 }
 
+// GetProduct handles getting a single product by ID.
+//
+//	@Summary		Get product
+//	@Description	Get a single product by ID for the authenticated user's organization
+//	@Tags			products
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Product ID"
+//	@Success		200	{object}	Product
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		403	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Router			/products/{id} [get]
+func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	productID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid product ID")
+		return
+	}
+
+	product, err := h.service.GetProduct(r.Context(), user.OrganizationID, productID)
+	if err != nil {
+		if errors.Is(err, ErrProductNotFound) {
+			respondError(w, http.StatusNotFound, "product not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get product error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get product")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, product)
+}
+
 // CreateProduct handles creating a new product.
 //
 //	@Summary		Create product

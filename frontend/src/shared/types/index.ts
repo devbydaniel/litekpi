@@ -24,7 +24,18 @@ export interface Product {
   updatedAt: string
 }
 
-// Data point types
+// Measurement types
+export interface Measurement {
+  id: string
+  productId: string
+  name: string
+  value: number
+  timestamp: string
+  metadata: Record<string, string> | null
+  createdAt: string
+}
+
+// Data point types (deprecated - use Measurement)
 export interface DataPoint {
   id: string
   productId: string

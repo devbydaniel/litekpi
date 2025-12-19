@@ -1,4 +1,5 @@
-import { MoreHorizontal, Trash, RefreshCw, Package } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { MoreHorizontal, Trash, RefreshCw, Package, ChevronRight } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 import { EmptyState } from '@/shared/components/ui/empty-state'
 import {
@@ -74,13 +75,22 @@ function ProductListItem({
   onRegenerateKey,
 }: ProductListItemProps) {
   return (
-    <Item>
-      <ItemContent>
-        <ItemTitle>{product.name}</ItemTitle>
-        <ItemDescription>
-          Created {new Date(product.createdAt).toLocaleDateString()}
-        </ItemDescription>
-      </ItemContent>
+    <Item className="group">
+      <Link
+        to="/products/$productId"
+        params={{ productId: product.id }}
+        className="flex flex-1 items-center gap-4"
+      >
+        <ItemContent>
+          <ItemTitle className="group-hover:text-primary transition-colors">
+            {product.name}
+          </ItemTitle>
+          <ItemDescription>
+            Created {new Date(product.createdAt).toLocaleDateString()}
+          </ItemDescription>
+        </ItemContent>
+        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+      </Link>
 
       <ItemActions>
         <DropdownMenu>

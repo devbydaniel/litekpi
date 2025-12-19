@@ -64,6 +64,22 @@ func (s *Service) ListProducts(ctx context.Context, orgID uuid.UUID) ([]Product,
 	return products, nil
 }
 
+// GetProduct returns a single product after verifying organization ownership.
+func (s *Service) GetProduct(ctx context.Context, orgID, productID uuid.UUID) (*Product, error) {
+	product, err := s.repo.GetProductByID(ctx, productID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get product: %w", err)
+	}
+	if product == nil {
+		return nil, ErrProductNotFound
+	}
+	if product.OrganizationID != orgID {
+		return nil, ErrUnauthorized
+	}
+
+	return product, nil
+}
+
 // DeleteProduct deletes a product after verifying organization ownership.
 func (s *Service) DeleteProduct(ctx context.Context, orgID, productID uuid.UUID) error {
 	product, err := s.repo.GetProductByID(ctx, productID)

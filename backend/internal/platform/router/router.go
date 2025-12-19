@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"github.com/devbydaniel/litekpi/internal/auth"
+	"github.com/devbydaniel/litekpi/internal/demo"
 	"github.com/devbydaniel/litekpi/internal/ingest"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
@@ -60,8 +61,12 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 	// Initialize ingest module
 	ingestRepo := ingest.NewRepository(db.Pool)
-	ingestService := ingest.NewService(ingestRepo, productRepo)
-	ingestHandler := ingest.NewHandler(ingestService)
+	ingestService := ingest.NewService(ingestRepo)
+	ingestHandler := ingest.NewHandler(ingestService, productService)
+
+	// Initialize demo module (uses both product and ingest services)
+	demoService := demo.NewService(productService, ingestService)
+	demoHandler := demo.NewHandler(demoService)
 
 	// Health check endpoint
 	r.Get("/health", healthHandler(db))
@@ -87,8 +92,14 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 		// Register product routes
 		productHandler.RegisterRoutes(r, authService.Middleware)
 
+		// Register demo routes (must be before ingest to handle /products/demo)
+		demoHandler.RegisterRoutes(r, authService.Middleware)
+
 		// Register ingest routes (uses API key auth, not JWT)
 		ingestHandler.RegisterRoutes(r, productRepo)
+
+		// Register measurement query routes (uses JWT auth)
+		ingestHandler.RegisterMeasurementRoutes(r, authService.Middleware)
 	})
 
 	return r

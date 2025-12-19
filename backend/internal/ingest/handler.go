@@ -5,31 +5,40 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
+	"github.com/devbydaniel/litekpi/internal/auth"
+	"github.com/devbydaniel/litekpi/internal/product"
 )
 
-// Handler handles HTTP requests for metric ingestion.
+// Handler handles HTTP requests for measurement ingestion.
 type Handler struct {
-	service *Service
+	service        *Service
+	productService *product.Service
 }
 
 // NewHandler creates a new ingest handler.
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, productService *product.Service) *Handler {
+	return &Handler{service: service, productService: productService}
 }
 
-// IngestSingle handles single metric ingestion.
+// IngestSingle handles single measurement ingestion.
 //
-//	@Summary		Ingest single metric
-//	@Description	Ingest a single metric data point
+//	@Summary		Ingest single measurement
+//	@Description	Ingest a single measurement data point
 //	@Tags			ingest
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			request	body		IngestRequest	true	"Metric data"
+//	@Param			request	body		IngestRequest	true	"Measurement data"
 //	@Success		201		{object}	IngestResponse
 //	@Failure		400		{object}	ErrorResponse	"Validation error"
 //	@Failure		401		{object}	ErrorResponse	"Unauthorized"
-//	@Failure		409		{object}	ErrorResponse	"Duplicate metric"
+//	@Failure		409		{object}	ErrorResponse	"Duplicate measurement"
 //	@Failure		500		{object}	ErrorResponse	"Internal error"
 //	@Router			/ingest [post]
 func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
@@ -62,11 +71,11 @@ func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Check for duplicate metric
-		if errors.Is(err, ErrDuplicateMetric) {
+		// Check for duplicate measurement
+		if errors.Is(err, ErrDuplicateMeasurement) {
 			respondJSON(w, http.StatusConflict, ErrorResponse{
-				Error:   "duplicate_metric",
-				Message: "a metric with this name and timestamp already exists",
+				Error:   "duplicate_measurement",
+				Message: "a measurement with this name and timestamp already exists",
 			})
 			return
 		}
@@ -74,7 +83,7 @@ func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ingest single error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
-			Message: "failed to ingest metric",
+			Message: "failed to ingest measurement",
 		})
 		return
 	}
@@ -82,19 +91,19 @@ func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, response)
 }
 
-// IngestBatch handles batch metric ingestion.
+// IngestBatch handles batch measurement ingestion.
 //
-//	@Summary		Ingest batch of metrics
-//	@Description	Ingest multiple metric data points atomically (max 100)
+//	@Summary		Ingest batch of measurements
+//	@Description	Ingest multiple measurement data points atomically (max 100)
 //	@Tags			ingest
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			request	body		BatchIngestRequest	true	"Batch of metrics"
+//	@Param			request	body		BatchIngestRequest	true	"Batch of measurements"
 //	@Success		201		{object}	BatchIngestResponse
 //	@Failure		400		{object}	ErrorResponse	"Validation error"
 //	@Failure		401		{object}	ErrorResponse	"Unauthorized"
-//	@Failure		409		{object}	ErrorResponse	"Duplicate metric"
+//	@Failure		409		{object}	ErrorResponse	"Duplicate measurement"
 //	@Failure		500		{object}	ErrorResponse	"Internal error"
 //	@Router			/ingest/batch [post]
 func (h *Handler) IngestBatch(w http.ResponseWriter, r *http.Request) {
@@ -127,11 +136,11 @@ func (h *Handler) IngestBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Check for duplicate metric
-		if errors.Is(err, ErrDuplicateMetric) {
+		// Check for duplicate measurement
+		if errors.Is(err, ErrDuplicateMeasurement) {
 			respondJSON(w, http.StatusConflict, ErrorResponse{
-				Error:   "duplicate_metric",
-				Message: "a metric with this name and timestamp already exists",
+				Error:   "duplicate_measurement",
+				Message: "a measurement with this name and timestamp already exists",
 			})
 			return
 		}
@@ -139,7 +148,7 @@ func (h *Handler) IngestBatch(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ingest batch error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
-			Message: "failed to ingest metrics",
+			Message: "failed to ingest measurements",
 		})
 		return
 	}
@@ -151,4 +160,265 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+// validateProductOwnership validates that the product belongs to the user's organization.
+func (h *Handler) validateProductOwnership(r *http.Request) (*product.Product, error) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return nil, errors.New("unauthorized")
+	}
+
+	productIDStr := chi.URLParam(r, "productId")
+	productID, err := uuid.Parse(productIDStr)
+	if err != nil {
+		return nil, errors.New("invalid product ID")
+	}
+
+	prod, err := h.productService.GetProduct(r.Context(), user.OrganizationID, productID)
+	if err != nil {
+		if errors.Is(err, product.ErrProductNotFound) {
+			return nil, errors.New("product not found")
+		}
+		if errors.Is(err, product.ErrUnauthorized) {
+			return nil, errors.New("unauthorized")
+		}
+		return nil, err
+	}
+
+	return prod, nil
+}
+
+// ListMeasurementNames handles listing unique measurement names for a product.
+//
+//	@Summary		List measurement names
+//	@Description	Get all unique measurement names for a product with their metadata keys
+//	@Tags			measurements
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			productId	path		string	true	"Product ID"
+//	@Success		200			{object}	ListMeasurementNamesResponse
+//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404			{object}	ErrorResponse	"Product not found"
+//	@Failure		500			{object}	ErrorResponse	"Internal error"
+//	@Router			/products/{productId}/measurements [get]
+func (h *Handler) ListMeasurementNames(w http.ResponseWriter, r *http.Request) {
+	prod, err := h.validateProductOwnership(r)
+	if err != nil {
+		if err.Error() == "unauthorized" {
+			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "unauthorized",
+			})
+			return
+		}
+		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "product not found",
+			})
+			return
+		}
+		log.Printf("validate product ownership error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to validate product",
+		})
+		return
+	}
+
+	measurements, err := h.service.GetMeasurementNames(r.Context(), prod.ID)
+	if err != nil {
+		log.Printf("get measurement names error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to get measurement names",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, ListMeasurementNamesResponse{Measurements: measurements})
+}
+
+// GetMetadataValues handles getting metadata filter options for a measurement.
+//
+//	@Summary		Get metadata values
+//	@Description	Get all unique metadata key-value options for filtering a measurement
+//	@Tags			measurements
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			productId	path		string	true	"Product ID"
+//	@Param			name		path		string	true	"Measurement name"
+//	@Success		200			{object}	GetMetadataValuesResponse
+//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404			{object}	ErrorResponse	"Product not found"
+//	@Failure		500			{object}	ErrorResponse	"Internal error"
+//	@Router			/products/{productId}/measurements/{name}/metadata [get]
+func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
+	prod, err := h.validateProductOwnership(r)
+	if err != nil {
+		if err.Error() == "unauthorized" {
+			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "unauthorized",
+			})
+			return
+		}
+		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "product not found",
+			})
+			return
+		}
+		log.Printf("validate product ownership error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to validate product",
+		})
+		return
+	}
+
+	measurementName := chi.URLParam(r, "name")
+	if measurementName == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "measurement name is required",
+		})
+		return
+	}
+
+	metadata, err := h.service.GetMetadataValues(r.Context(), prod.ID, measurementName)
+	if err != nil {
+		log.Printf("get metadata values error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to get metadata values",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, GetMetadataValuesResponse{Metadata: metadata})
+}
+
+// GetMeasurementData handles getting aggregated chart data for a measurement.
+//
+//	@Summary		Get measurement data
+//	@Description	Get daily aggregated data points for a measurement with optional metadata filtering
+//	@Tags			measurements
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			productId	path		string	true	"Product ID"
+//	@Param			name		path		string	true	"Measurement name"
+//	@Param			start		query		string	true	"Start date (ISO 8601)"
+//	@Param			end			query		string	true	"End date (ISO 8601)"
+//	@Success		200			{object}	GetMeasurementDataResponse
+//	@Failure		400			{object}	ErrorResponse	"Validation error"
+//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404			{object}	ErrorResponse	"Product not found"
+//	@Failure		500			{object}	ErrorResponse	"Internal error"
+//	@Router			/products/{productId}/measurements/{name}/data [get]
+func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
+	prod, err := h.validateProductOwnership(r)
+	if err != nil {
+		if err.Error() == "unauthorized" {
+			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "unauthorized",
+			})
+			return
+		}
+		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "product not found",
+			})
+			return
+		}
+		log.Printf("validate product ownership error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to validate product",
+		})
+		return
+	}
+
+	measurementName := chi.URLParam(r, "name")
+	if measurementName == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "measurement name is required",
+		})
+		return
+	}
+
+	// Parse start date
+	startStr := r.URL.Query().Get("start")
+	if startStr == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "start date is required",
+		})
+		return
+	}
+	startDate, err := time.Parse(time.RFC3339, startStr)
+	if err != nil {
+		// Try parsing as date-only
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{
+				Error:   "validation_failed",
+				Message: "invalid start date format (use ISO 8601)",
+			})
+			return
+		}
+	}
+
+	// Parse end date
+	endStr := r.URL.Query().Get("end")
+	if endStr == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "end date is required",
+		})
+		return
+	}
+	endDate, err := time.Parse(time.RFC3339, endStr)
+	if err != nil {
+		// Try parsing as date-only
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{
+				Error:   "validation_failed",
+				Message: "invalid end date format (use ISO 8601)",
+			})
+			return
+		}
+		// For date-only, add one day to make it inclusive
+		endDate = endDate.AddDate(0, 0, 1)
+	}
+
+	// Parse metadata filters (metadata.key=value format)
+	metadataFilters := make(map[string]string)
+	for key, values := range r.URL.Query() {
+		if strings.HasPrefix(key, "metadata.") && len(values) > 0 {
+			metadataKey := strings.TrimPrefix(key, "metadata.")
+			metadataFilters[metadataKey] = values[0]
+		}
+	}
+
+	dataPoints, err := h.service.GetAggregatedMeasurements(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters)
+	if err != nil {
+		log.Printf("get measurement data error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to get measurement data",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, GetMeasurementDataResponse{
+		Name:       measurementName,
+		DataPoints: dataPoints,
+	})
 }
