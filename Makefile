@@ -7,11 +7,11 @@
 
 # Configuration
 DEV_COMPOSE := docker compose -f docker-compose.dev.yml
-DATABASE_URL ?= postgres://trackable:secret@localhost:5432/trackable?sslmode=disable
+DATABASE_URL ?= postgres://litekpi:secret@localhost:5432/litekpi?sslmode=disable
 
 # Default target
 help:
-	@echo "Trackable Development Commands"
+	@echo "LiteKPI Development Commands"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev              - Start services + backend + frontend"
@@ -65,7 +65,7 @@ dev-backend:
 		DATABASE_URL="$(DATABASE_URL)" \
 		SMTP_HOST=localhost \
 		SMTP_PORT=1025 \
-		SMTP_FROM=noreply@trackable.local \
+		SMTP_FROM=noreply@litekpi.local \
 		air
 
 # Start frontend with HMR

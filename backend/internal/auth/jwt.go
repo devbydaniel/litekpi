@@ -42,7 +42,7 @@ func (j *JWTService) GenerateToken(userID uuid.UUID, email string) (string, erro
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.expiration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "trackable",
+			Issuer:    "litekpi",
 			Subject:   userID.String(),
 		},
 	}

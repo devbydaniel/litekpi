@@ -1,7 +1,8 @@
 import { AuthLayout } from '@/layouts/auth'
+import { Button } from '@/shared/components/ui/button'
+import { Card, CardContent } from '@/shared/components/ui/card'
+import { StatusCard } from '@/shared/components/ui/status-card'
 import { useOAuthCallback } from './hooks/use-oauth-callback'
-import { LoadingState } from './ui/loading-state'
-import { ErrorState } from './ui/error-state'
 
 interface CallbackPageProps {
   token: string
@@ -14,11 +15,28 @@ export function CallbackPage({ token, user: userEncoded, error: initialError }: 
 
   return (
     <AuthLayout>
-      {error ? (
-        <ErrorState error={error} onReturnToLogin={() => navigate({ to: '/login' })} />
-      ) : (
-        <LoadingState />
-      )}
+      <Card>
+        <CardContent className="p-6">
+          {error ? (
+            <StatusCard
+              status="error"
+              title="Authentication failed"
+              description={error}
+              action={
+                <Button onClick={() => navigate({ to: '/login' })}>
+                  Return to sign in
+                </Button>
+              }
+            />
+          ) : (
+            <StatusCard
+              status="loading"
+              title="Completing sign in..."
+              description="Please wait a moment."
+            />
+          )}
+        </CardContent>
+      </Card>
     </AuthLayout>
   )
 }

@@ -1,16 +1,36 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { authApi } from '@/shared/api/auth'
 import { ApiError } from '@/shared/api/client'
 
+const newPasswordSchema = z
+  .object({
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+
+export type NewPasswordFormValues = z.infer<typeof newPasswordSchema>
+
 export function useNewPasswordForm(token: string) {
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const form = useForm<NewPasswordFormValues>({
+    resolver: zodResolver(newPasswordSchema),
+    defaultValues: {
+      password: '',
+      confirmPassword: '',
+    },
+  })
+
+  const onSubmit = async (values: NewPasswordFormValues) => {
     setError(null)
 
     if (!token) {
@@ -18,20 +38,10 @@ export function useNewPasswordForm(token: string) {
       return
     }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-
     setIsLoading(true)
 
     try {
-      await authApi.resetPassword({ token, newPassword: password })
+      await authApi.resetPassword({ token, newPassword: values.password })
       setSuccess(true)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -46,13 +56,10 @@ export function useNewPasswordForm(token: string) {
   }
 
   return {
-    password,
-    setPassword,
-    confirmPassword,
-    setConfirmPassword,
+    form,
     isLoading,
     error,
     success,
-    handleSubmit,
+    onSubmit,
   }
 }

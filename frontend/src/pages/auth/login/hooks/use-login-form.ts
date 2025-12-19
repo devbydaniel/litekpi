@@ -1,8 +1,18 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useNavigate } from '@tanstack/react-router'
 import { authApi } from '@/shared/api/auth'
 import { useAuthStore } from '@/shared/stores/auth-store'
 import { ApiError } from '@/shared/api/client'
+
+const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+export type LoginFormValues = z.infer<typeof loginSchema>
 
 interface UseLoginFormOptions {
   initialError?: string
@@ -12,18 +22,23 @@ export function useLoginForm({ initialError }: UseLoginFormOptions = {}) {
   const navigate = useNavigate()
   const setAuth = useAuthStore((state) => state.setAuth)
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(initialError || null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  })
+
+  const onSubmit = async (values: LoginFormValues) => {
     setError(null)
     setIsLoading(true)
 
     try {
-      const response = await authApi.login({ email, password })
+      const response = await authApi.login(values)
       setAuth(response.user, response.token)
       navigate({ to: '/' })
     } catch (err) {
@@ -44,13 +59,10 @@ export function useLoginForm({ initialError }: UseLoginFormOptions = {}) {
   }
 
   return {
-    email,
-    setEmail,
-    password,
-    setPassword,
+    form,
     isLoading,
     error,
-    handleSubmit,
+    onSubmit,
     handleOAuthLogin,
   }
 }

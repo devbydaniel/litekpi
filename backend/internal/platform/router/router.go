@@ -9,11 +9,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
-	"github.com/trackable/trackable/internal/auth"
-	"github.com/trackable/trackable/internal/platform/config"
-	"github.com/trackable/trackable/internal/platform/database"
+	"github.com/devbydaniel/litekpi/internal/auth"
+	"github.com/devbydaniel/litekpi/internal/platform/config"
+	"github.com/devbydaniel/litekpi/internal/platform/database"
 
-	_ "github.com/trackable/trackable/docs" // Swagger docs
+	_ "github.com/devbydaniel/litekpi/docs" // Swagger docs
 )
 
 // New creates a new Chi router with middleware and routes configured.
@@ -64,7 +64,7 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 		// API status endpoint
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusOK, map[string]string{
-				"message": "Trackable API v1",
+				"message": "LiteKPI API v1",
 				"status":  "ok",
 			})
 		})

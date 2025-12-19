@@ -8,7 +8,7 @@
 
 ## Summary
 
-This document captures the technology choices for the Trackable KPI platform. Decisions are driven by the core constraints: **self-hostable via Docker Compose**, **low complexity**, and **low data volume**.
+This document captures the technology choices for the LiteKPI platform. Decisions are driven by the core constraints: **self-hostable via Docker Compose**, **low complexity**, and **low data volume**.
 
 ---
 
@@ -300,8 +300,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=trackable
-      - POSTGRES_USER=trackable
+      - POSTGRES_DB=litekpi
+      - POSTGRES_USER=litekpi
       - POSTGRES_PASSWORD=secret
 
 volumes:

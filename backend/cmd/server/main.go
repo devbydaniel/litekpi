@@ -1,9 +1,9 @@
-// @title Trackable API
+// @title LiteKPI API
 // @version 1.0
 // @description KPI tracking platform API
 //
 // @contact.name API Support
-// @contact.url https://github.com/trackable/trackable
+// @contact.url https://github.com/devbydaniel/litekpi
 //
 // @license.name MIT
 //
@@ -27,9 +27,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trackable/trackable/internal/platform/config"
-	"github.com/trackable/trackable/internal/platform/database"
-	"github.com/trackable/trackable/internal/platform/router"
+	"github.com/devbydaniel/litekpi/internal/platform/config"
+	"github.com/devbydaniel/litekpi/internal/platform/database"
+	"github.com/devbydaniel/litekpi/internal/platform/router"
 )
 
 func main() {

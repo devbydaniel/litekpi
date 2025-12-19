@@ -1,41 +1,54 @@
+import { UseFormReturn } from 'react-hook-form'
+
+import { Button } from '@/shared/components/ui/button'
+import { Input } from '@/shared/components/ui/input'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/shared/components/ui/form'
+import type { ResetPasswordFormValues } from '../hooks/use-reset-password-form'
+
 interface ResetPasswordFormProps {
-  email: string
+  form: UseFormReturn<ResetPasswordFormValues>
   isLoading: boolean
-  onEmailChange: (value: string) => void
-  onSubmit: (e: React.FormEvent) => void
+  onSubmit: (values: ResetPasswordFormValues) => void
 }
 
 export function ResetPasswordForm({
-  email,
+  form,
   isLoading,
-  onEmailChange,
   onSubmit,
 }: ResetPasswordFormProps) {
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label htmlFor="email" className="text-sm font-medium">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => onEmailChange(e.target.value)}
-          required
-          disabled={isLoading}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  disabled={isLoading}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </div>
 
-      <button
-        type="submit"
-        disabled={isLoading}
-        className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-      >
-        {isLoading ? 'Sending...' : 'Send reset link'}
-      </button>
-    </form>
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Sending...' : 'Send reset link'}
+        </Button>
+      </form>
+    </Form>
   )
 }

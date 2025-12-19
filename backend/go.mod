@@ -1,4 +1,4 @@
-module github.com/trackable/trackable
+module github.com/devbydaniel/litekpi
 
 go 1.24.0
 

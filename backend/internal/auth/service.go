@@ -18,7 +18,7 @@ import (
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 
-	"github.com/trackable/trackable/internal/platform/config"
+	"github.com/devbydaniel/litekpi/internal/platform/config"
 )
 
 var (

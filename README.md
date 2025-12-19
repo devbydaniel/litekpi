@@ -1,4 +1,4 @@
-# Trackable
+# LiteKPI
 
 A metrics tracking and analytics platform for your products.
 
@@ -60,7 +60,7 @@ A metrics tracking and analytics platform for your products.
 ## Project Structure
 
 ```
-trackable/
+litekpi/
 ├── backend/                 # Go API server
 │   ├── cmd/server/         # Application entry point
 │   ├── internal/           # Private application code

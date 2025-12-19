@@ -1,7 +1,7 @@
 import { defineConfig } from 'orval'
 
 export default defineConfig({
-  trackable: {
+  litekpi: {
     input: '../backend/docs/swagger.json',
     output: {
       mode: 'single',

@@ -1,73 +1,82 @@
 import { Link } from '@tanstack/react-router'
+
 import { AuthLayout } from '@/layouts/auth'
+import { Alert, AlertDescription } from '@/shared/components/ui/alert'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/shared/components/ui/card'
+import { StatusCard } from '@/shared/components/ui/status-card'
+import { OAuthButtons } from '@/shared/components/auth/oauth-buttons'
 import { useRegisterForm } from './hooks/use-register-form'
 import { RegisterForm } from './ui/register-form'
-import { OAuthButtons } from './ui/oauth-buttons'
-import { ErrorAlert } from './ui/error-alert'
-import { SuccessMessage } from './ui/success-message'
 
 export function RegisterPage() {
-  const {
-    email,
-    setEmail,
-    password,
-    setPassword,
-    confirmPassword,
-    setConfirmPassword,
-    isLoading,
-    error,
-    success,
-    handleSubmit,
-    handleOAuthLogin,
-  } = useRegisterForm()
+  const { form, isLoading, error, success, email, onSubmit, handleOAuthLogin } =
+    useRegisterForm()
 
   if (success) {
     return (
       <AuthLayout>
-        <SuccessMessage email={email} />
+        <Card>
+          <CardContent className="p-6">
+            <StatusCard
+              status="success"
+              title="Check your email"
+              description={`We've sent a verification link to ${email}. Please click the link to verify your account.`}
+              action={
+                <Link to="/login" className="font-medium hover:underline">
+                  Return to sign in
+                </Link>
+              }
+            />
+          </CardContent>
+        </Card>
       </AuthLayout>
     )
   }
 
   return (
     <AuthLayout>
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold">Create an account</h1>
-          <p className="text-sm text-muted-foreground">Get started with Trackable</p>
-        </div>
+      <Card>
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Create an account</CardTitle>
+          <CardDescription>Get started with LiteKPI</CardDescription>
+        </CardHeader>
 
-        {error && <ErrorAlert message={error} />}
+        <CardContent className="space-y-6">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        <RegisterForm
-          email={email}
-          password={password}
-          confirmPassword={confirmPassword}
-          isLoading={isLoading}
-          onEmailChange={setEmail}
-          onPasswordChange={setPassword}
-          onConfirmPasswordChange={setConfirmPassword}
-          onSubmit={handleSubmit}
-        />
+          <RegisterForm form={form} isLoading={isLoading} onSubmit={onSubmit} />
 
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+
+          <OAuthButtons isLoading={isLoading} onOAuthLogin={handleOAuthLogin} />
+
+          <div className="text-center text-sm">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium hover:underline">
+              Sign in
+            </Link>
           </div>
-        </div>
-
-        <OAuthButtons isLoading={isLoading} onOAuthLogin={handleOAuthLogin} />
-
-        <div className="mt-6 text-center text-sm">
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium hover:underline">
-            Sign in
-          </Link>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </AuthLayout>
   )
 }

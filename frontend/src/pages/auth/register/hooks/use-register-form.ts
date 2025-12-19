@@ -1,33 +1,43 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { authApi } from '@/shared/api/auth'
 import { ApiError } from '@/shared/api/client'
 
+const registerSchema = z
+  .object({
+    email: z.string().email('Please enter a valid email'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+
+export type RegisterFormValues = z.infer<typeof registerSchema>
+
 export function useRegisterForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+  })
+
+  const onSubmit = async (values: RegisterFormValues) => {
     setError(null)
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-
     setIsLoading(true)
 
     try {
-      await authApi.register({ email, password })
+      await authApi.register({ email: values.email, password: values.password })
       setSuccess(true)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -47,16 +57,12 @@ export function useRegisterForm() {
   }
 
   return {
-    email,
-    setEmail,
-    password,
-    setPassword,
-    confirmPassword,
-    setConfirmPassword,
+    form,
     isLoading,
     error,
     success,
-    handleSubmit,
+    email: form.watch('email'),
+    onSubmit,
     handleOAuthLogin,
   }
 }

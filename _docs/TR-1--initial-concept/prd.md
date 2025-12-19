@@ -1,4 +1,4 @@
-# PRD: Trackable - KPI Tracking Platform
+# PRD: LiteKPI - KPI Tracking Platform
 
 **Ticket:** TR-1
 **Status:** Draft

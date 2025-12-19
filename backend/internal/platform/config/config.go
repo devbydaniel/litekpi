@@ -6,7 +6,7 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://trackable:secret@localhost:5432/trackable?sslmode=disable"`
+	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://litekpi:secret@localhost:5432/litekpi?sslmode=disable"`
 	JWTSecret   string `env:"JWT_SECRET" envDefault:"your-secret-key-change-in-production"`
 	AppURL      string `env:"APP_URL" envDefault:"http://localhost:5173"`
 	APIURL      string `env:"API_URL" envDefault:"http://localhost:8080"`
