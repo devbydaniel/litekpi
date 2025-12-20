@@ -29,6 +29,25 @@ export interface GetMeasurementDataResponse {
   dataPoints: AggregatedDataPoint[]
 }
 
+export interface SplitSeries {
+  key: string
+  dataPoints: AggregatedDataPoint[]
+}
+
+export interface GetMeasurementDataSplitResponse {
+  name: string
+  splitBy: string
+  series: SplitSeries[]
+}
+
+export type GetMeasurementDataResult = GetMeasurementDataResponse | GetMeasurementDataSplitResponse
+
+export function isSplitResponse(
+  response: GetMeasurementDataResult
+): response is GetMeasurementDataSplitResponse {
+  return 'series' in response
+}
+
 export const measurementsApi = {
   listNames(productId: string): Promise<ListMeasurementNamesResponse> {
     return api.get(`/products/${productId}/measurements`)
@@ -45,8 +64,9 @@ export const measurementsApi = {
       start: string
       end: string
       metadata?: Record<string, string>
+      splitBy?: string
     }
-  ): Promise<GetMeasurementDataResponse> {
+  ): Promise<GetMeasurementDataResult> {
     const queryParams: Record<string, string> = {
       start: params.start,
       end: params.end,
@@ -57,6 +77,11 @@ export const measurementsApi = {
       for (const [key, value] of Object.entries(params.metadata)) {
         queryParams[`metadata.${key}`] = value
       }
+    }
+
+    // Add splitBy parameter if specified
+    if (params.splitBy) {
+      queryParams.splitBy = params.splitBy
     }
 
     return api.get(`/products/${productId}/measurements/${encodeURIComponent(name)}/data`, {

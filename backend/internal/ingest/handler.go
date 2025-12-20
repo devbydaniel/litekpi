@@ -304,7 +304,7 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 // GetMeasurementData handles getting aggregated chart data for a measurement.
 //
 //	@Summary		Get measurement data
-//	@Description	Get daily aggregated data points for a measurement with optional metadata filtering
+//	@Description	Get daily aggregated data points for a measurement with optional metadata filtering and split-by
 //	@Tags			measurements
 //	@Produce		json
 //	@Security		BearerAuth
@@ -312,6 +312,7 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 //	@Param			name		path		string	true	"Measurement name"
 //	@Param			start		query		string	true	"Start date (ISO 8601)"
 //	@Param			end			query		string	true	"End date (ISO 8601)"
+//	@Param			splitBy		query		string	false	"Metadata key to split data by"
 //	@Success		200			{object}	GetMeasurementDataResponse
 //	@Failure		400			{object}	ErrorResponse	"Validation error"
 //	@Failure		401			{object}	ErrorResponse	"Unauthorized"
@@ -405,6 +406,27 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 			metadataKey := strings.TrimPrefix(key, "metadata.")
 			metadataFilters[metadataKey] = values[0]
 		}
+	}
+
+	// Check for splitBy parameter
+	splitByKey := r.URL.Query().Get("splitBy")
+	if splitByKey != "" {
+		series, err := h.service.GetAggregatedMeasurementsSplitBy(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters, splitByKey)
+		if err != nil {
+			log.Printf("get measurement data split by error: %v", err)
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+				Error:   "internal_error",
+				Message: "failed to get measurement data",
+			})
+			return
+		}
+
+		respondJSON(w, http.StatusOK, GetMeasurementDataSplitResponse{
+			Name:    measurementName,
+			SplitBy: splitByKey,
+			Series:  series,
+		})
+		return
 	}
 
 	dataPoints, err := h.service.GetAggregatedMeasurements(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters)

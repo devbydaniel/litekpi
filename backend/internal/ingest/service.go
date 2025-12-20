@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -250,4 +251,107 @@ func (s *Service) GetMetadataValues(ctx context.Context, productID uuid.UUID, me
 // GetAggregatedMeasurements retrieves daily aggregated values with optional metadata filtering.
 func (s *Service) GetAggregatedMeasurements(ctx context.Context, productID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string) ([]AggregatedDataPoint, error) {
 	return s.repo.GetAggregatedMeasurements(ctx, productID, name, startDate, endDate, metadataFilters)
+}
+
+// maxSplitSeries is the maximum number of distinct series to return before grouping into "Other".
+const maxSplitSeries = 10
+
+// GetAggregatedMeasurementsSplitBy retrieves daily aggregated values split by a metadata key.
+// Keeps top 10 series by total sum and aggregates the rest into "Other".
+func (s *Service) GetAggregatedMeasurementsSplitBy(ctx context.Context, productID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, splitByKey string) ([]SplitSeries, error) {
+	// Get raw split data from repository
+	series, err := s.repo.GetAggregatedMeasurementsSplitBy(ctx, productID, name, startDate, endDate, metadataFilters, splitByKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// If 10 or fewer series, return as-is (sorted by total)
+	if len(series) <= maxSplitSeries {
+		return sortSeriesByTotal(series), nil
+	}
+
+	// Calculate total sum for each series
+	type seriesWithTotal struct {
+		series SplitSeries
+		total  float64
+	}
+	seriesWithTotals := make([]seriesWithTotal, len(series))
+	for i, s := range series {
+		var total float64
+		for _, dp := range s.DataPoints {
+			total += dp.Sum
+		}
+		seriesWithTotals[i] = seriesWithTotal{series: s, total: total}
+	}
+
+	// Sort by total descending
+	sort.Slice(seriesWithTotals, func(i, j int) bool {
+		return seriesWithTotals[i].total > seriesWithTotals[j].total
+	})
+
+	// Take top 10
+	topSeries := make([]SplitSeries, maxSplitSeries)
+	for i := 0; i < maxSplitSeries; i++ {
+		topSeries[i] = seriesWithTotals[i].series
+	}
+
+	// Aggregate remaining into "Other"
+	otherDataPoints := make(map[string]*AggregatedDataPoint)
+	for i := maxSplitSeries; i < len(seriesWithTotals); i++ {
+		for _, dp := range seriesWithTotals[i].series.DataPoints {
+			if existing, ok := otherDataPoints[dp.Date]; ok {
+				existing.Sum += dp.Sum
+				existing.Count += dp.Count
+			} else {
+				otherDataPoints[dp.Date] = &AggregatedDataPoint{
+					Date:  dp.Date,
+					Sum:   dp.Sum,
+					Count: dp.Count,
+				}
+			}
+		}
+	}
+
+	// Convert "Other" map to sorted slice
+	if len(otherDataPoints) > 0 {
+		otherDPs := make([]AggregatedDataPoint, 0, len(otherDataPoints))
+		for _, dp := range otherDataPoints {
+			otherDPs = append(otherDPs, *dp)
+		}
+		sort.Slice(otherDPs, func(i, j int) bool {
+			return otherDPs[i].Date < otherDPs[j].Date
+		})
+		topSeries = append(topSeries, SplitSeries{
+			Key:        "Other",
+			DataPoints: otherDPs,
+		})
+	}
+
+	return topSeries, nil
+}
+
+// sortSeriesByTotal sorts series by their total sum in descending order.
+func sortSeriesByTotal(series []SplitSeries) []SplitSeries {
+	type seriesWithTotal struct {
+		series SplitSeries
+		total  float64
+	}
+	seriesWithTotals := make([]seriesWithTotal, len(series))
+	for i, s := range series {
+		var total float64
+		for _, dp := range s.DataPoints {
+			total += dp.Sum
+		}
+		seriesWithTotals[i] = seriesWithTotal{series: s, total: total}
+	}
+
+	sort.Slice(seriesWithTotals, func(i, j int) bool {
+		return seriesWithTotals[i].total > seriesWithTotals[j].total
+	})
+
+	result := make([]SplitSeries, len(series))
+	for i, s := range seriesWithTotals {
+		result[i] = s.series
+	}
+	return result
 }

@@ -265,3 +265,74 @@ func (r *Repository) GetAggregatedMeasurements(ctx context.Context, productID uu
 
 	return dataPoints, nil
 }
+
+// GetAggregatedMeasurementsSplitBy retrieves daily aggregated values split by a metadata key.
+// Returns raw data without any top-N aggregation (that's handled by the service layer).
+func (r *Repository) GetAggregatedMeasurementsSplitBy(ctx context.Context, productID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, splitByKey string) ([]SplitSeries, error) {
+	// Build the query with split by metadata key
+	query := `SELECT
+		metadata->>$5 as split_key,
+		DATE(timestamp) as date,
+		SUM(value) as sum,
+		COUNT(*) as count
+	FROM measurements
+	WHERE product_id = $1 AND name = $2 AND timestamp >= $3 AND timestamp < $4
+	  AND metadata ? $5`
+
+	args := []interface{}{productID, name, startDate, endDate, splitByKey}
+
+	// Add additional metadata filters using JSONB containment operator
+	if len(metadataFilters) > 0 {
+		filterJSON, err := json.Marshal(metadataFilters)
+		if err != nil {
+			return nil, err
+		}
+		query += ` AND metadata @> $6`
+		args = append(args, filterJSON)
+	}
+
+	query += ` GROUP BY split_key, DATE(timestamp) ORDER BY split_key, date`
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Collect data points grouped by split key
+	seriesMap := make(map[string][]AggregatedDataPoint)
+	for rows.Next() {
+		var splitKey string
+		var dp AggregatedDataPoint
+		var date time.Time
+		if err := rows.Scan(&splitKey, &date, &dp.Sum, &dp.Count); err != nil {
+			return nil, err
+		}
+		dp.Date = date.Format("2006-01-02")
+		seriesMap[splitKey] = append(seriesMap[splitKey], dp)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Convert to slice of SplitSeries
+	var series []SplitSeries
+	for key, dataPoints := range seriesMap {
+		series = append(series, SplitSeries{
+			Key:        key,
+			DataPoints: dataPoints,
+		})
+	}
+
+	// Sort by key for consistent ordering
+	sort.Slice(series, func(i, j int) bool {
+		return series[i].Key < series[j].Key
+	})
+
+	if series == nil {
+		series = []SplitSeries{}
+	}
+
+	return series, nil
+}
