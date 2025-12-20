@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -12,12 +13,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import { Pencil } from 'lucide-react'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/shared/components/ui/card'
+import { Button } from '@/shared/components/ui/button'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import type { MeasurementSummary } from '@/shared/api/measurements'
 import { useMeasurementChart } from '../hooks/use-measurement-chart'
@@ -88,6 +91,8 @@ export function MeasurementChart({
   productId,
   measurement,
 }: MeasurementChartProps) {
+  const [isEditing, setIsEditing] = useState(false)
+
   const {
     data,
     seriesKeys,
@@ -224,12 +229,21 @@ export function MeasurementChart({
 
   return (
     <Card>
-      <CardHeader className="px-6 py-4">
+      <CardHeader className="flex flex-row items-center justify-between px-6 py-4">
         <CardTitle className="text-base font-medium">
           {measurement.name}
         </CardTitle>
+        <Button
+          variant={isEditing ? 'secondary' : 'ghost'}
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setIsEditing(!isEditing)}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
       </CardHeader>
-      <ChartToolbar
+      {isEditing && (
+        <ChartToolbar
         metadata={metadata}
         chartType={chartType}
         dateRange={dateRange}
@@ -241,7 +255,9 @@ export function MeasurementChart({
         onSplitByChange={setSplitBy}
         onFilterChange={setMetadataFilter}
       />
-      <ChartContextBar
+      )}
+      {isEditing && (
+        <ChartContextBar
         filters={metadataFilters}
         isDirty={isDirty}
         isSaving={isSaving}
@@ -249,6 +265,7 @@ export function MeasurementChart({
         onClearAll={clearAllFilters}
         onSave={savePreferences}
       />
+      )}
       <CardContent className="mt-2">
         {isLoading ? (
           <Skeleton className="h-[300px] w-full" />
