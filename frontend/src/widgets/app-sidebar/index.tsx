@@ -35,7 +35,22 @@ export function AppSidebar() {
           to="/"
           className="flex items-center gap-2 px-2 py-1 font-semibold"
         >
-          <span className="text-xl">📊</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 32 32"
+            className="size-5 text-primary"
+          >
+            <rect x="4" y="20" width="6" height="8" rx="1" fill="currentColor" />
+            <rect
+              x="13"
+              y="12"
+              width="6"
+              height="16"
+              rx="1"
+              fill="currentColor"
+            />
+            <rect x="22" y="4" width="6" height="24" rx="1" fill="currentColor" />
+          </svg>
           <span className="font-heading">LiteKPI</span>
         </Link>
       </SidebarHeader>
