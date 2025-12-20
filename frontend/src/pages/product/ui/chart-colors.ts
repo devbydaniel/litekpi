@@ -1,15 +1,15 @@
 export const SERIES_COLORS = [
-  'hsl(221, 83%, 53%)', // Blue
-  'hsl(142, 71%, 45%)', // Green
-  'hsl(38, 92%, 50%)', // Orange
-  'hsl(0, 84%, 60%)', // Red
-  'hsl(262, 83%, 58%)', // Purple
-  'hsl(174, 72%, 40%)', // Teal
-  'hsl(326, 85%, 55%)', // Pink
-  'hsl(43, 96%, 56%)', // Yellow
-  'hsl(199, 89%, 48%)', // Cyan
-  'hsl(24, 94%, 53%)', // Dark Orange
-  'hsl(220, 9%, 46%)', // Gray (for "Other")
+  'hsl(172, 66%, 45%)', // Teal (primary)
+  'hsl(265, 55%, 55%)', // Violet
+  'hsl(195, 70%, 48%)', // Cyan
+  'hsl(235, 50%, 55%)', // Indigo
+  'hsl(160, 50%, 45%)', // Seafoam
+  'hsl(280, 45%, 55%)', // Purple
+  'hsl(205, 65%, 52%)', // Sky
+  'hsl(250, 45%, 58%)', // Periwinkle
+  'hsl(185, 55%, 42%)', // Dark Cyan
+  'hsl(220, 55%, 50%)', // Blue
+  'hsl(215, 15%, 50%)', // Slate (for "Other")
 ] as const
 
 export function getSeriesColor(index: number, key: string): string {

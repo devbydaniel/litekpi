@@ -7,7 +7,11 @@ import {
   usePostProductsProductIdMeasurementsNamePreferences,
   getGetProductsProductIdMeasurementsNamePreferencesQueryKey,
 } from '@/shared/api/generated/api'
-import type { AggregatedDataPoint } from '@/shared/api/generated/models'
+import type {
+  GetMeasurementDataResponse,
+  GetMeasurementDataSplitResponse,
+  SplitSeries,
+} from '@/shared/api/generated/models'
 import { customInstance } from '@/shared/api/client'
 import { type DateRangeValue, getDateRangeFromValue } from '../ui/date-range-filter'
 
@@ -18,45 +22,22 @@ interface UseMeasurementChartOptions {
 
 export type ChartType = 'area' | 'bar' | 'line'
 
-interface SplitSeries {
-  key: string
-  dataPoints: AggregatedDataPoint[]
-}
-
-interface GetMeasurementDataResponse {
-  name: string
-  dataPoints: AggregatedDataPoint[]
-}
-
-interface GetMeasurementDataSplitResponse {
-  name: string
-  splitBy: string
-  series: SplitSeries[]
-}
-
-type GetMeasurementDataResult = GetMeasurementDataResponse | GetMeasurementDataSplitResponse
-
-function isSplitResponse(
-  response: GetMeasurementDataResult
-): response is GetMeasurementDataSplitResponse {
-  return 'series' in response
-}
-
 // Transform split data for Recharts (pivot to { date, key1: sum, key2: sum, ... })
 function transformSplitData(series: SplitSeries[]) {
-  const seriesKeys = series.map((s) => s.key)
+  const seriesKeys = series.map((s) => s.key ?? '')
 
   // Create a map of date -> { date, key1: sum, key2: sum, ... }
   const dateMap = new Map<string, Record<string, number | string>>()
 
   for (const s of series) {
-    for (const dp of s.dataPoints) {
+    const key = s.key ?? ''
+    for (const dp of s.dataPoints ?? []) {
       if (!dp.date) continue
       if (!dateMap.has(dp.date)) {
         dateMap.set(dp.date, { date: dp.date })
       }
       const entry = dateMap.get(dp.date)!
-      entry[s.key] = dp.sum ?? 0
+      entry[key] = dp.sum ?? 0
     }
   }
 
@@ -69,19 +50,48 @@ function transformSplitData(series: SplitSeries[]) {
 }
 
 // Custom fetch for measurement data with metadata filter support
+// Used when metadata filters are active (metadata.key=value query params not supported by generated code)
 async function fetchMeasurementData(
   productId: string,
   name: string,
   params: {
     start: string
     end: string
-    metadata?: Record<string, string>
-    splitBy?: string
+    metadata: Record<string, string>
   }
-): Promise<GetMeasurementDataResult> {
+): Promise<GetMeasurementDataResponse> {
   const queryParams: Record<string, string> = {
     start: params.start,
     end: params.end,
+  }
+
+  // Add metadata filters with "metadata." prefix
+  for (const [key, value] of Object.entries(params.metadata)) {
+    queryParams[`metadata.${key}`] = value
+  }
+
+  return customInstance<GetMeasurementDataResponse>({
+    url: `/products/${productId}/measurements/${encodeURIComponent(name)}/data`,
+    method: 'GET',
+    params: queryParams,
+  })
+}
+
+// Custom fetch for split measurement data with metadata filter support
+async function fetchMeasurementDataSplit(
+  productId: string,
+  name: string,
+  params: {
+    start: string
+    end: string
+    splitBy: string
+    metadata?: Record<string, string>
+  }
+): Promise<GetMeasurementDataSplitResponse> {
+  const queryParams: Record<string, string> = {
+    start: params.start,
+    end: params.end,
+    splitBy: params.splitBy,
   }
 
   // Add metadata filters with "metadata." prefix
@@ -91,12 +101,8 @@ async function fetchMeasurementData(
     }
   }
 
-  if (params.splitBy) {
-    queryParams.splitBy = params.splitBy
-  }
-
-  return customInstance<GetMeasurementDataResult>({
-    url: `/products/${productId}/measurements/${encodeURIComponent(name)}/data`,
+  return customInstance<GetMeasurementDataSplitResponse>({
+    url: `/products/${productId}/measurements/${encodeURIComponent(name)}/data/split`,
     method: 'GET',
     params: queryParams,
   })
@@ -176,39 +182,59 @@ export function useMeasurementChart({ productId, measurementName }: UseMeasureme
     return clean
   }, [metadataFilters])
 
-  // Fetch chart data based on current filters (using custom fetch for metadata filter support)
-  const { data: chartData, isLoading: isLoadingData } = useQuery({
+  const hasMetadataFilters = Object.keys(cleanMetadataFilters).length > 0
+
+  // Fetch non-split chart data (custom fetch needed for metadata filters)
+  const { data: nonSplitData, isLoading: isLoadingNonSplit } = useQuery({
+    queryKey: ['measurements', productId, measurementName, 'data', dateRange, cleanMetadataFilters],
+    queryFn: () =>
+      fetchMeasurementData(productId, measurementName, {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        metadata: cleanMetadataFilters,
+      }),
+    enabled: !splitBy,
+  })
+
+  // Fetch split chart data (custom fetch needed for metadata filters)
+  const { data: splitData, isLoading: isLoadingSplit } = useQuery({
     queryKey: [
       'measurements',
       productId,
       measurementName,
       'data',
+      'split',
       dateRange,
       cleanMetadataFilters,
       splitBy,
     ],
     queryFn: () =>
-      fetchMeasurementData(productId, measurementName, {
+      fetchMeasurementDataSplit(productId, measurementName, {
         start: start.toISOString(),
         end: end.toISOString(),
-        metadata: Object.keys(cleanMetadataFilters).length > 0 ? cleanMetadataFilters : undefined,
-        splitBy,
+        splitBy: splitBy!,
+        metadata: hasMetadataFilters ? cleanMetadataFilters : undefined,
       }),
+    enabled: !!splitBy,
   })
+
+  const isLoadingData = splitBy ? isLoadingSplit : isLoadingNonSplit
 
   // Transform data based on whether it's split or not
   const { data, seriesKeys } = useMemo(() => {
-    if (!chartData) return { data: [], seriesKeys: [] as string[] }
-
-    if (isSplitResponse(chartData)) {
-      return transformSplitData(chartData.series)
+    if (splitBy && splitData?.series) {
+      return transformSplitData(splitData.series)
     }
 
-    return {
-      data: chartData.dataPoints,
-      seriesKeys: [] as string[],
+    if (!splitBy && nonSplitData?.dataPoints) {
+      return {
+        data: nonSplitData.dataPoints,
+        seriesKeys: [] as string[],
+      }
     }
-  }, [chartData])
+
+    return { data: [], seriesKeys: [] as string[] }
+  }, [splitBy, splitData, nonSplitData])
 
   const setMetadataFilter = useCallback((key: string, value: string | undefined) => {
     setMetadataFilters((prev) => {

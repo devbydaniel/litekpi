@@ -304,7 +304,7 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 // GetMeasurementData handles getting aggregated chart data for a measurement.
 //
 //	@Summary		Get measurement data
-//	@Description	Get daily aggregated data points for a measurement with optional metadata filtering and split-by
+//	@Description	Get daily aggregated data points for a measurement with optional metadata filtering
 //	@Tags			measurements
 //	@Produce		json
 //	@Security		BearerAuth
@@ -312,7 +312,6 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 //	@Param			name		path		string	true	"Measurement name"
 //	@Param			start		query		string	true	"Start date (ISO 8601)"
 //	@Param			end			query		string	true	"End date (ISO 8601)"
-//	@Param			splitBy		query		string	false	"Metadata key to split data by"
 //	@Success		200			{object}	GetMeasurementDataResponse
 //	@Failure		400			{object}	ErrorResponse	"Validation error"
 //	@Failure		401			{object}	ErrorResponse	"Unauthorized"
@@ -353,81 +352,16 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse start date
-	startStr := r.URL.Query().Get("start")
-	if startStr == "" {
+	startDate, endDate, err := h.parseDateRange(r)
+	if err != nil {
 		respondJSON(w, http.StatusBadRequest, ErrorResponse{
 			Error:   "validation_failed",
-			Message: "start date is required",
+			Message: err.Error(),
 		})
 		return
 	}
-	startDate, err := time.Parse(time.RFC3339, startStr)
-	if err != nil {
-		// Try parsing as date-only
-		startDate, err = time.Parse("2006-01-02", startStr)
-		if err != nil {
-			respondJSON(w, http.StatusBadRequest, ErrorResponse{
-				Error:   "validation_failed",
-				Message: "invalid start date format (use ISO 8601)",
-			})
-			return
-		}
-	}
 
-	// Parse end date
-	endStr := r.URL.Query().Get("end")
-	if endStr == "" {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_failed",
-			Message: "end date is required",
-		})
-		return
-	}
-	endDate, err := time.Parse(time.RFC3339, endStr)
-	if err != nil {
-		// Try parsing as date-only
-		endDate, err = time.Parse("2006-01-02", endStr)
-		if err != nil {
-			respondJSON(w, http.StatusBadRequest, ErrorResponse{
-				Error:   "validation_failed",
-				Message: "invalid end date format (use ISO 8601)",
-			})
-			return
-		}
-		// For date-only, add one day to make it inclusive
-		endDate = endDate.AddDate(0, 0, 1)
-	}
-
-	// Parse metadata filters (metadata.key=value format)
-	metadataFilters := make(map[string]string)
-	for key, values := range r.URL.Query() {
-		if strings.HasPrefix(key, "metadata.") && len(values) > 0 {
-			metadataKey := strings.TrimPrefix(key, "metadata.")
-			metadataFilters[metadataKey] = values[0]
-		}
-	}
-
-	// Check for splitBy parameter
-	splitByKey := r.URL.Query().Get("splitBy")
-	if splitByKey != "" {
-		series, err := h.service.GetAggregatedMeasurementsSplitBy(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters, splitByKey)
-		if err != nil {
-			log.Printf("get measurement data split by error: %v", err)
-			respondJSON(w, http.StatusInternalServerError, ErrorResponse{
-				Error:   "internal_error",
-				Message: "failed to get measurement data",
-			})
-			return
-		}
-
-		respondJSON(w, http.StatusOK, GetMeasurementDataSplitResponse{
-			Name:    measurementName,
-			SplitBy: splitByKey,
-			Series:  series,
-		})
-		return
-	}
+	metadataFilters := h.parseMetadataFilters(r)
 
 	dataPoints, err := h.service.GetAggregatedMeasurements(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters)
 	if err != nil {
@@ -443,6 +377,138 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 		Name:       measurementName,
 		DataPoints: dataPoints,
 	})
+}
+
+// GetMeasurementDataSplit handles getting aggregated chart data split by a metadata key.
+//
+//	@Summary		Get measurement data split by metadata
+//	@Description	Get daily aggregated data points for a measurement split by a metadata key
+//	@Tags			measurements
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			productId	path		string	true	"Product ID"
+//	@Param			name		path		string	true	"Measurement name"
+//	@Param			start		query		string	true	"Start date (ISO 8601)"
+//	@Param			end			query		string	true	"End date (ISO 8601)"
+//	@Param			splitBy		query		string	true	"Metadata key to split data by"
+//	@Success		200			{object}	GetMeasurementDataSplitResponse
+//	@Failure		400			{object}	ErrorResponse	"Validation error"
+//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404			{object}	ErrorResponse	"Product not found"
+//	@Failure		500			{object}	ErrorResponse	"Internal error"
+//	@Router			/products/{productId}/measurements/{name}/data/split [get]
+func (h *Handler) GetMeasurementDataSplit(w http.ResponseWriter, r *http.Request) {
+	prod, err := h.validateProductOwnership(r)
+	if err != nil {
+		if err.Error() == "unauthorized" {
+			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "unauthorized",
+			})
+			return
+		}
+		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "product not found",
+			})
+			return
+		}
+		log.Printf("validate product ownership error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to validate product",
+		})
+		return
+	}
+
+	measurementName := chi.URLParam(r, "name")
+	if measurementName == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "measurement name is required",
+		})
+		return
+	}
+
+	splitByKey := r.URL.Query().Get("splitBy")
+	if splitByKey == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "splitBy parameter is required",
+		})
+		return
+	}
+
+	startDate, endDate, err := h.parseDateRange(r)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	metadataFilters := h.parseMetadataFilters(r)
+
+	series, err := h.service.GetAggregatedMeasurementsSplitBy(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters, splitByKey)
+	if err != nil {
+		log.Printf("get measurement data split by error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to get measurement data",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, GetMeasurementDataSplitResponse{
+		Name:    measurementName,
+		SplitBy: splitByKey,
+		Series:  series,
+	})
+}
+
+// parseDateRange extracts and validates start/end dates from request query params.
+func (h *Handler) parseDateRange(r *http.Request) (time.Time, time.Time, error) {
+	startStr := r.URL.Query().Get("start")
+	if startStr == "" {
+		return time.Time{}, time.Time{}, errors.New("start date is required")
+	}
+	startDate, err := time.Parse(time.RFC3339, startStr)
+	if err != nil {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid start date format (use ISO 8601)")
+		}
+	}
+
+	endStr := r.URL.Query().Get("end")
+	if endStr == "" {
+		return time.Time{}, time.Time{}, errors.New("end date is required")
+	}
+	endDate, err := time.Parse(time.RFC3339, endStr)
+	if err != nil {
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid end date format (use ISO 8601)")
+		}
+		// For date-only, add one day to make it inclusive
+		endDate = endDate.AddDate(0, 0, 1)
+	}
+
+	return startDate, endDate, nil
+}
+
+// parseMetadataFilters extracts metadata.key=value filters from request query params.
+func (h *Handler) parseMetadataFilters(r *http.Request) map[string]string {
+	metadataFilters := make(map[string]string)
+	for key, values := range r.URL.Query() {
+		if strings.HasPrefix(key, "metadata.") && len(values) > 0 {
+			metadataKey := strings.TrimPrefix(key, "metadata.")
+			metadataFilters[metadataKey] = values[0]
+		}
+	}
+	return metadataFilters
 }
 
 // GetPreferences handles getting saved chart preferences for a measurement.
