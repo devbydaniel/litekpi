@@ -23,7 +23,7 @@ import type { Product } from '@/shared/types'
 interface ProductListProps {
   products: Product[]
   isLoading: boolean
-  onDelete: (id: string) => void
+  onDelete: (product: Product) => void
   onRegenerateKey: (product: Product) => void
 }
 
@@ -65,7 +65,7 @@ export function ProductList({
 
 interface ProductListItemProps {
   product: Product
-  onDelete: (id: string) => void
+  onDelete: (product: Product) => void
   onRegenerateKey: (product: Product) => void
 }
 
@@ -107,7 +107,7 @@ function ProductListItem({
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onClick={() => onDelete(product.id)}
+              onClick={() => onDelete(product)}
             >
               <Trash className="mr-2 h-4 w-4" />
               Delete

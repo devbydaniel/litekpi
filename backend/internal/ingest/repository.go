@@ -336,3 +336,45 @@ func (r *Repository) GetAggregatedMeasurementsSplitBy(ctx context.Context, produ
 
 	return series, nil
 }
+
+// GetPreferences retrieves saved chart preferences for a measurement.
+// Returns nil if no preferences are saved.
+func (r *Repository) GetPreferences(ctx context.Context, productID uuid.UUID, measurementName string) (*MeasurementPreferences, error) {
+	var preferencesJSON []byte
+	err := r.pool.QueryRow(ctx,
+		`SELECT preferences FROM measurement_preferences
+		WHERE product_id = $1 AND measurement_name = $2`,
+		productID, measurementName,
+	).Scan(&preferencesJSON)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var prefs MeasurementPreferences
+	if err := json.Unmarshal(preferencesJSON, &prefs); err != nil {
+		return nil, err
+	}
+
+	return &prefs, nil
+}
+
+// SavePreferences saves or updates chart preferences for a measurement.
+func (r *Repository) SavePreferences(ctx context.Context, productID uuid.UUID, measurementName string, prefs *MeasurementPreferences) error {
+	preferencesJSON, err := json.Marshal(prefs)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.pool.Exec(ctx,
+		`INSERT INTO measurement_preferences (id, product_id, measurement_name, preferences, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		ON CONFLICT (product_id, measurement_name)
+		DO UPDATE SET preferences = $4, updated_at = NOW()`,
+		uuid.New(), productID, measurementName, preferencesJSON,
+	)
+	return err
+}

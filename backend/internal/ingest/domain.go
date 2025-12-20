@@ -126,3 +126,21 @@ type GetMeasurementDataSplitResponse struct {
 	SplitBy string        `json:"splitBy"`
 	Series  []SplitSeries `json:"series"`
 }
+
+// MeasurementPreferences represents saved chart preferences for a measurement.
+type MeasurementPreferences struct {
+	ChartType       string            `json:"chartType"`
+	DateRange       string            `json:"dateRange"`
+	SplitBy         *string           `json:"splitBy"`
+	MetadataFilters map[string]string `json:"metadataFilters"`
+}
+
+// SavePreferencesRequest represents the request to save measurement preferences.
+type SavePreferencesRequest struct {
+	Preferences MeasurementPreferences `json:"preferences"`
+}
+
+// GetPreferencesResponse represents the response for fetching preferences.
+type GetPreferencesResponse struct {
+	Preferences *MeasurementPreferences `json:"preferences"`
+}

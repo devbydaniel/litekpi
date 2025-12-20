@@ -8,7 +8,9 @@ export function useProducts() {
   const queryClient = useQueryClient()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [regenerateDialogOpen, setRegenerateDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [apiKey, setApiKey] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
@@ -32,6 +34,8 @@ export function useProducts() {
     mutationFn: productsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
+      setDeleteDialogOpen(false)
+      setProductToDelete(null)
       toast.success('Product deleted')
     },
     onError: () => {
@@ -67,8 +71,15 @@ export function useProducts() {
     await createMutation.mutateAsync({ name })
   }
 
-  const handleDeleteProduct = async (id: string) => {
-    await deleteMutation.mutateAsync(id)
+  const handleDeleteProduct = (product: Product) => {
+    setProductToDelete(product)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteProduct = async () => {
+    if (productToDelete) {
+      await deleteMutation.mutateAsync(productToDelete.id)
+    }
   }
 
   const handleRegenerateKey = (product: Product) => {
@@ -89,7 +100,9 @@ export function useProducts() {
   const closeDialogs = () => {
     setCreateDialogOpen(false)
     setRegenerateDialogOpen(false)
+    setDeleteDialogOpen(false)
     setSelectedProduct(null)
+    setProductToDelete(null)
     setApiKey(null)
   }
 
@@ -99,14 +112,18 @@ export function useProducts() {
     createDialogOpen,
     setCreateDialogOpen,
     regenerateDialogOpen,
+    deleteDialogOpen,
     selectedProduct,
+    productToDelete,
     apiKey,
     isCreating: createMutation.isPending,
     isCreatingDemo: createDemoMutation.isPending,
     isRegenerating: regenerateMutation.isPending,
+    isDeleting: deleteMutation.isPending,
     handleCreateProduct,
     handleCreateDemo,
     handleDeleteProduct,
+    confirmDeleteProduct,
     handleRegenerateKey,
     confirmRegenerateKey,
     closeDialogs,

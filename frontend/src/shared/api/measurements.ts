@@ -48,6 +48,24 @@ export function isSplitResponse(
   return 'series' in response
 }
 
+export type ChartType = 'area' | 'bar' | 'line'
+export type DateRangeValue = 'last24h' | 'last7days' | 'last30days'
+
+export interface MeasurementPreferences {
+  chartType: ChartType
+  dateRange: DateRangeValue
+  splitBy: string | null
+  metadataFilters: Record<string, string>
+}
+
+export interface GetPreferencesResponse {
+  preferences: MeasurementPreferences | null
+}
+
+export interface SavePreferencesRequest {
+  preferences: MeasurementPreferences
+}
+
 export const measurementsApi = {
   listNames(productId: string): Promise<ListMeasurementNamesResponse> {
     return api.get(`/products/${productId}/measurements`)
@@ -86,6 +104,20 @@ export const measurementsApi = {
 
     return api.get(`/products/${productId}/measurements/${encodeURIComponent(name)}/data`, {
       params: queryParams,
+    })
+  },
+
+  getPreferences(productId: string, name: string): Promise<GetPreferencesResponse> {
+    return api.get(`/products/${productId}/measurements/${encodeURIComponent(name)}/preferences`)
+  },
+
+  savePreferences(
+    productId: string,
+    name: string,
+    preferences: MeasurementPreferences
+  ): Promise<{ message: string }> {
+    return api.post(`/products/${productId}/measurements/${encodeURIComponent(name)}/preferences`, {
+      preferences,
     })
   },
 }

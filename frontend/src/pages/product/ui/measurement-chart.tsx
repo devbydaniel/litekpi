@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -13,16 +12,17 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { BarChart3, AreaChart as AreaChartIcon, TrendingUp } from 'lucide-react'
-import { Button } from '@/shared/components/ui/button'
-import { ButtonGroup } from '@/shared/components/ui/button-group'
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/shared/components/ui/card'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import type { MeasurementSummary } from '@/shared/api/measurements'
 import { useMeasurementChart } from '../hooks/use-measurement-chart'
-import { DateRangeFilter } from './date-range-filter'
-import { MetadataFilters } from './metadata-filters'
-import { SplitBySelector } from './split-by-selector'
+import { ChartToolbar } from './chart-toolbar'
+import { ChartContextBar } from './chart-context-bar'
 import { ChartEmptyState } from './chart-empty-state'
 import { getSeriesColor } from './chart-colors'
 
@@ -51,17 +51,21 @@ const CustomTooltip = ({ active, payload, label, isSplit }: any) => {
   if (isSplit) {
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">
-        <div className="text-xs text-muted-foreground mb-1">{label}</div>
-        {payload.map((item: { name?: string; value?: number; color?: string }) => (
-          <div key={item.name} className="flex items-center gap-2 text-sm">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: item.color }}
-            />
-            <span className="text-muted-foreground">{item.name}:</span>
-            <span className="font-medium">{item.value?.toLocaleString() ?? 0}</span>
-          </div>
-        ))}
+        <div className="mb-1 text-xs text-muted-foreground">{label}</div>
+        {payload.map(
+          (item: { name?: string; value?: number; color?: string }) => (
+            <div key={item.name} className="flex items-center gap-2 text-sm">
+              <div
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="text-muted-foreground">{item.name}:</span>
+              <span className="font-medium">
+                {item.value?.toLocaleString() ?? 0}
+              </span>
+            </div>
+          )
+        )}
       </div>
     )
   }
@@ -73,25 +77,36 @@ const CustomTooltip = ({ active, payload, label, isSplit }: any) => {
     <div className="rounded-lg border bg-background p-2 shadow-sm">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-medium">Sum: {dataPoint.sum?.toLocaleString()}</div>
-      <div className="text-xs text-muted-foreground">Count: {dataPoint.count?.toLocaleString()}</div>
+      <div className="text-xs text-muted-foreground">
+        Count: {dataPoint.count?.toLocaleString()}
+      </div>
     </div>
   )
 }
 
-export function MeasurementChart({ productId, measurement }: MeasurementChartProps) {
-  const [chartType, setChartType] = useState<'area' | 'bar' | 'line'>('area')
+export function MeasurementChart({
+  productId,
+  measurement,
+}: MeasurementChartProps) {
   const {
     data,
     seriesKeys,
     isSplit,
     metadata,
+    chartType,
     dateRange,
     metadataFilters,
     splitBy,
+    setChartType,
     setDateRange,
     setMetadataFilter,
+    clearAllFilters,
     setSplitBy,
+    savePreferences,
+    isSaving,
     isLoading,
+    isDirty,
+    activeFilterCount,
   } = useMeasurementChart({
     productId,
     measurementName: measurement.name,
@@ -105,13 +120,19 @@ export function MeasurementChart({ productId, measurement }: MeasurementChartPro
 
   const renderChart = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tooltipContent = (props: any) => <CustomTooltip {...props} isSplit={isSplit} />
+    const tooltipContent = (props: any) => (
+      <CustomTooltip {...props} isSplit={isSplit} />
+    )
 
     if (chartType === 'line') {
       return (
         <LineChart data={data} margin={chartMargin}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis dataKey="date" {...commonAxisProps} tickFormatter={formatDate} />
+          <XAxis
+            dataKey="date"
+            {...commonAxisProps}
+            tickFormatter={formatDate}
+          />
           <YAxis {...commonAxisProps} tickFormatter={formatYAxis} />
           <Tooltip content={tooltipContent} />
           {isSplit && <Legend />}
@@ -143,7 +164,11 @@ export function MeasurementChart({ productId, measurement }: MeasurementChartPro
       return (
         <AreaChart data={data} margin={chartMargin}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis dataKey="date" {...commonAxisProps} tickFormatter={formatDate} />
+          <XAxis
+            dataKey="date"
+            {...commonAxisProps}
+            tickFormatter={formatDate}
+          />
           <YAxis {...commonAxisProps} tickFormatter={formatYAxis} />
           <Tooltip content={tooltipContent} />
           {isSplit && <Legend />}
@@ -199,49 +224,32 @@ export function MeasurementChart({ productId, measurement }: MeasurementChartPro
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 px-6 py-4">
-        <CardTitle className="text-base font-medium">{measurement.name}</CardTitle>
-        <div className="flex items-center gap-2">
-          <SplitBySelector
-            metadata={metadata}
-            value={splitBy}
-            onChange={setSplitBy}
-          />
-          <MetadataFilters
-            metadata={metadata}
-            values={metadataFilters}
-            onChange={setMetadataFilter}
-          />
-          <DateRangeFilter value={dateRange} onChange={setDateRange} />
-          <ButtonGroup>
-            <Button
-              variant={chartType === 'area' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setChartType('area')}
-            >
-              <AreaChartIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={chartType === 'bar' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setChartType('bar')}
-            >
-              <BarChart3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={chartType === 'line' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setChartType('line')}
-            >
-              <TrendingUp className="h-4 w-4" />
-            </Button>
-          </ButtonGroup>
-        </div>
+      <CardHeader className="px-6 py-4">
+        <CardTitle className="text-base font-medium">
+          {measurement.name}
+        </CardTitle>
       </CardHeader>
-      <CardContent>
+      <ChartToolbar
+        metadata={metadata}
+        chartType={chartType}
+        dateRange={dateRange}
+        splitBy={splitBy}
+        filters={metadataFilters}
+        activeFilterCount={activeFilterCount}
+        onChartTypeChange={setChartType}
+        onDateRangeChange={setDateRange}
+        onSplitByChange={setSplitBy}
+        onFilterChange={setMetadataFilter}
+      />
+      <ChartContextBar
+        filters={metadataFilters}
+        isDirty={isDirty}
+        isSaving={isSaving}
+        onRemoveFilter={(key) => setMetadataFilter(key, undefined)}
+        onClearAll={clearAllFilters}
+        onSave={savePreferences}
+      />
+      <CardContent className="mt-2">
         {isLoading ? (
           <Skeleton className="h-[300px] w-full" />
         ) : data.length === 0 ? (

@@ -5,6 +5,7 @@ import { useProducts } from './hooks/use-products'
 import { ProductList } from './ui/product-list'
 import { CreateProductDialog } from './ui/create-product-dialog'
 import { RegenerateKeyDialog } from './ui/regenerate-key-dialog'
+import { DeleteProductDialog } from './ui/delete-product-dialog'
 
 export function ProductsPage() {
   const {
@@ -13,14 +14,18 @@ export function ProductsPage() {
     createDialogOpen,
     setCreateDialogOpen,
     regenerateDialogOpen,
+    deleteDialogOpen,
     selectedProduct,
+    productToDelete,
     apiKey,
     isCreating,
     isCreatingDemo,
     isRegenerating,
+    isDeleting,
     handleCreateProduct,
     handleCreateDemo,
     handleDeleteProduct,
+    confirmDeleteProduct,
     handleRegenerateKey,
     confirmRegenerateKey,
     closeDialogs,
@@ -68,6 +73,14 @@ export function ProductsPage() {
         apiKey={apiKey}
         isLoading={isRegenerating}
         onConfirm={confirmRegenerateKey}
+        onClose={closeDialogs}
+      />
+
+      <DeleteProductDialog
+        open={deleteDialogOpen}
+        product={productToDelete}
+        isLoading={isDeleting}
+        onConfirm={confirmDeleteProduct}
         onClose={closeDialogs}
       />
     </AuthenticatedLayout>

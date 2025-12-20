@@ -355,3 +355,35 @@ func sortSeriesByTotal(series []SplitSeries) []SplitSeries {
 	}
 	return result
 }
+
+// Valid chart type and date range values
+var (
+	validChartTypes = map[string]bool{"area": true, "bar": true, "line": true}
+	validDateRanges = map[string]bool{"last24h": true, "last7days": true, "last30days": true}
+)
+
+// GetPreferences retrieves saved chart preferences for a measurement.
+func (s *Service) GetPreferences(ctx context.Context, productID uuid.UUID, measurementName string) (*MeasurementPreferences, error) {
+	return s.repo.GetPreferences(ctx, productID, measurementName)
+}
+
+// SavePreferences saves chart preferences for a measurement after validation.
+func (s *Service) SavePreferences(ctx context.Context, productID uuid.UUID, measurementName string, prefs *MeasurementPreferences) error {
+	// Validate chart type
+	if !validChartTypes[prefs.ChartType] {
+		return &validationError{
+			errorType: "validation_failed",
+			message:   fmt.Sprintf("Invalid chart type '%s': must be one of area, bar, line", prefs.ChartType),
+		}
+	}
+
+	// Validate date range
+	if !validDateRanges[prefs.DateRange] {
+		return &validationError{
+			errorType: "validation_failed",
+			message:   fmt.Sprintf("Invalid date range '%s': must be one of last24h, last7days, last30days", prefs.DateRange),
+		}
+	}
+
+	return s.repo.SavePreferences(ctx, productID, measurementName, prefs)
+}

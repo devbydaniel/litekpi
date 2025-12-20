@@ -444,3 +444,144 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 		DataPoints: dataPoints,
 	})
 }
+
+// GetPreferences handles getting saved chart preferences for a measurement.
+//
+//	@Summary		Get measurement preferences
+//	@Description	Get saved chart preferences for a measurement
+//	@Tags			measurements
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			productId	path		string	true	"Product ID"
+//	@Param			name		path		string	true	"Measurement name"
+//	@Success		200			{object}	GetPreferencesResponse
+//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404			{object}	ErrorResponse	"Product not found"
+//	@Failure		500			{object}	ErrorResponse	"Internal error"
+//	@Router			/products/{productId}/measurements/{name}/preferences [get]
+func (h *Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
+	prod, err := h.validateProductOwnership(r)
+	if err != nil {
+		if err.Error() == "unauthorized" {
+			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "unauthorized",
+			})
+			return
+		}
+		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "product not found",
+			})
+			return
+		}
+		log.Printf("validate product ownership error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to validate product",
+		})
+		return
+	}
+
+	measurementName := chi.URLParam(r, "name")
+	if measurementName == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "measurement name is required",
+		})
+		return
+	}
+
+	prefs, err := h.service.GetPreferences(r.Context(), prod.ID, measurementName)
+	if err != nil {
+		log.Printf("get preferences error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to get preferences",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, GetPreferencesResponse{Preferences: prefs})
+}
+
+// SavePreferences handles saving chart preferences for a measurement.
+//
+//	@Summary		Save measurement preferences
+//	@Description	Save chart preferences for a measurement (creates or updates)
+//	@Tags			measurements
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			productId	path		string					true	"Product ID"
+//	@Param			name		path		string					true	"Measurement name"
+//	@Param			request		body		SavePreferencesRequest	true	"Preferences data"
+//	@Success		200			{object}	map[string]string		"success message"
+//	@Failure		400			{object}	ErrorResponse			"Validation error"
+//	@Failure		401			{object}	ErrorResponse			"Unauthorized"
+//	@Failure		404			{object}	ErrorResponse			"Product not found"
+//	@Failure		500			{object}	ErrorResponse			"Internal error"
+//	@Router			/products/{productId}/measurements/{name}/preferences [post]
+func (h *Handler) SavePreferences(w http.ResponseWriter, r *http.Request) {
+	prod, err := h.validateProductOwnership(r)
+	if err != nil {
+		if err.Error() == "unauthorized" {
+			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "unauthorized",
+			})
+			return
+		}
+		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "product not found",
+			})
+			return
+		}
+		log.Printf("validate product ownership error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to validate product",
+		})
+		return
+	}
+
+	measurementName := chi.URLParam(r, "name")
+	if measurementName == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "measurement name is required",
+		})
+		return
+	}
+
+	var req SavePreferencesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
+			Message: "invalid request body",
+		})
+		return
+	}
+
+	err = h.service.SavePreferences(r.Context(), prod.ID, measurementName, &req.Preferences)
+	if err != nil {
+		if ve, ok := IsValidationError(err); ok {
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{
+				Error:   ve.errorType,
+				Message: ve.message,
+			})
+			return
+		}
+		log.Printf("save preferences error: %v", err)
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "failed to save preferences",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "preferences saved"})
+}

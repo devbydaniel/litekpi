@@ -24,5 +24,7 @@ func (h *Handler) RegisterMeasurementRoutes(r chi.Router, authMiddleware func(ne
 		r.Get("/", h.ListMeasurementNames)
 		r.Get("/{name}/metadata", h.GetMetadataValues)
 		r.Get("/{name}/data", h.GetMeasurementData)
+		r.Get("/{name}/preferences", h.GetPreferences)
+		r.Post("/{name}/preferences", h.SavePreferences)
 	})
 }
