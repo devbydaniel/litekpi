@@ -21,7 +21,7 @@ export function DashboardPage() {
         <EmptyState
           icon="📊"
           title="Coming soon"
-          description="Product management and KPI tracking features are under development."
+          description="I'm not sure yet what exactly to display here. Suggestions? Let me know!"
           className="min-h-[400px]"
         />
       </div>
