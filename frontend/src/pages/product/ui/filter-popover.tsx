@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/shared/components/ui/popover'
-import type { MetadataValues } from '@/shared/api/measurements'
+import type { MetadataValues } from '@/shared/api/generated/models'
 import { SearchableFilter } from './searchable-filter'
 
 interface FilterPopoverProps {
@@ -44,10 +44,10 @@ export function FilterPopover({
           {metadata.map((meta) => (
             <SearchableFilter
               key={meta.key}
-              label={meta.key}
-              options={meta.values}
-              value={filters[meta.key]}
-              onChange={(value) => onFilterChange(meta.key, value)}
+              label={meta.key ?? ''}
+              options={meta.values ?? []}
+              value={filters[meta.key ?? '']}
+              onChange={(value) => onFilterChange(meta.key ?? '', value)}
             />
           ))}
         </div>

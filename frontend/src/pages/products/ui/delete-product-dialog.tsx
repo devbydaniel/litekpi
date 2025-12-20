@@ -7,7 +7,7 @@ import {
   DialogFooter,
 } from '@/shared/components/ui/dialog'
 import { Button } from '@/shared/components/ui/button'
-import type { Product } from '@/shared/types'
+import type { Product } from '@/shared/api/generated/models'
 
 interface DeleteProductDialogProps {
   open: boolean

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { LayoutDashboard, LogOut, Package } from 'lucide-react'
 import { useAuthStore } from '@/shared/stores/auth-store'
-import { authApi } from '@/shared/api/auth'
+import { postAuthLogout } from '@/shared/api/generated/api'
 import {
   Sidebar,
   SidebarContent,
@@ -20,7 +20,7 @@ export function AppSidebar() {
 
   const handleLogout = async () => {
     try {
-      await authApi.logout()
+      await postAuthLogout()
     } catch {
       // Continue with logout even if API call fails
     }

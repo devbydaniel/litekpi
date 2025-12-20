@@ -1,8 +1,15 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { productsApi } from '@/shared/api/products'
-import type { Product } from '@/shared/types'
+import {
+  useGetProducts,
+  usePostProducts,
+  useDeleteProductsId,
+  usePostProductsIdRegenerateKey,
+  usePostProductsDemo,
+  getGetProductsQueryKey,
+} from '@/shared/api/generated/api'
+import type { Product } from '@/shared/api/generated/models'
 
 export function useProducts() {
   const queryClient = useQueryClient()
@@ -13,62 +20,63 @@ export function useProducts() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [apiKey, setApiKey] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list(),
-  })
+  const { data, isLoading } = useGetProducts()
 
-  const createMutation = useMutation({
-    mutationFn: productsApi.create,
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      setApiKey(response.apiKey)
-      toast.success('Product created successfully')
-    },
-    onError: () => {
-      toast.error('Failed to create product')
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: productsApi.delete,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      setDeleteDialogOpen(false)
-      setProductToDelete(null)
-      toast.success('Product deleted')
-    },
-    onError: () => {
-      toast.error('Failed to delete product')
+  const createMutation = usePostProducts({
+    mutation: {
+      onSuccess: (response) => {
+        queryClient.invalidateQueries({ queryKey: getGetProductsQueryKey() })
+        setApiKey(response.apiKey ?? null)
+        toast.success('Product created successfully')
+      },
+      onError: () => {
+        toast.error('Failed to create product')
+      },
     },
   })
 
-  const regenerateMutation = useMutation({
-    mutationFn: productsApi.regenerateKey,
-    onSuccess: (response) => {
-      setApiKey(response.apiKey)
-      toast.success('API key regenerated')
-    },
-    onError: () => {
-      toast.error('Failed to regenerate API key')
+  const deleteMutation = useDeleteProductsId({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetProductsQueryKey() })
+        setDeleteDialogOpen(false)
+        setProductToDelete(null)
+        toast.success('Product deleted')
+      },
+      onError: () => {
+        toast.error('Failed to delete product')
+      },
     },
   })
 
-  const createDemoMutation = useMutation({
-    mutationFn: productsApi.createDemo,
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      setApiKey(response.apiKey)
-      setCreateDialogOpen(true)
-      toast.success('Demo product created successfully')
+  const regenerateMutation = usePostProductsIdRegenerateKey({
+    mutation: {
+      onSuccess: (response) => {
+        setApiKey(response.apiKey ?? null)
+        toast.success('API key regenerated')
+      },
+      onError: () => {
+        toast.error('Failed to regenerate API key')
+      },
     },
-    onError: () => {
-      toast.error('Failed to create demo product')
+  })
+
+  const createDemoMutation = usePostProductsDemo({
+    mutation: {
+      onSuccess: (response) => {
+        queryClient.invalidateQueries({ queryKey: getGetProductsQueryKey() })
+        setApiKey(response.apiKey ?? null)
+        setCreateDialogOpen(true)
+        toast.success('Demo product created successfully')
+      },
+      onError: () => {
+        toast.error('Failed to create demo product')
+      },
     },
   })
 
   const handleCreateProduct = async (name: string) => {
-    await createMutation.mutateAsync({ name })
+    await createMutation.mutateAsync({ data: { name } })
   }
 
   const handleDeleteProduct = (product: Product) => {
@@ -77,8 +85,8 @@ export function useProducts() {
   }
 
   const confirmDeleteProduct = async () => {
-    if (productToDelete) {
-      await deleteMutation.mutateAsync(productToDelete.id)
+    if (productToDelete?.id) {
+      await deleteMutation.mutateAsync({ id: productToDelete.id })
     }
   }
 
@@ -88,8 +96,8 @@ export function useProducts() {
   }
 
   const confirmRegenerateKey = async () => {
-    if (selectedProduct) {
-      await regenerateMutation.mutateAsync(selectedProduct.id)
+    if (selectedProduct?.id) {
+      await regenerateMutation.mutateAsync({ id: selectedProduct.id })
     }
   }
 

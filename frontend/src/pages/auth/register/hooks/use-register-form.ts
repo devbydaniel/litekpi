@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { authApi } from '@/shared/api/auth'
+import { usePostAuthRegister } from '@/shared/api/generated/api'
 import { ApiError } from '@/shared/api/client'
 
 const registerSchema = z
@@ -21,9 +21,24 @@ const registerSchema = z
 export type RegisterFormValues = z.infer<typeof registerSchema>
 
 export function useRegisterForm() {
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  const registerMutation = usePostAuthRegister({
+    mutation: {
+      onSuccess: () => {
+        setSuccess(true)
+      },
+      onError: (err) => {
+        if (err instanceof ApiError) {
+          const data = err.data as { error?: string }
+          setError(data.error || 'Registration failed')
+        } else {
+          setError('An unexpected error occurred')
+        }
+      },
+    },
+  })
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -38,40 +53,22 @@ export function useRegisterForm() {
 
   const onSubmit = async (values: RegisterFormValues) => {
     setError(null)
-    setIsLoading(true)
-
-    try {
-      await authApi.register({
+    await registerMutation.mutateAsync({
+      data: {
         email: values.email,
         password: values.password,
         name: values.name,
         organizationName: values.organizationName,
-      })
-      setSuccess(true)
-    } catch (err) {
-      if (err instanceof ApiError) {
-        const data = err.data as { error?: string }
-        setError(data.error || 'Registration failed')
-      } else {
-        setError('An unexpected error occurred')
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleOAuthLogin = (provider: 'google' | 'github') => {
-    const url = provider === 'google' ? authApi.getGoogleAuthUrl() : authApi.getGithubAuthUrl()
-    window.location.href = url
+      },
+    })
   }
 
   return {
     form,
-    isLoading,
+    isLoading: registerMutation.isPending,
     error,
     success,
     email: form.watch('email'),
     onSubmit,
-    handleOAuthLogin,
   }
 }

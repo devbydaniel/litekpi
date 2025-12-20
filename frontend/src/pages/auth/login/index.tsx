@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/shared/components/ui/card'
-import { OAuthButtons } from '@/shared/components/auth/oauth-buttons'
 import { useLoginForm } from './hooks/use-login-form'
 import { LoginForm } from './ui/login-form'
 
@@ -18,7 +17,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ error: initialError }: LoginPageProps) {
-  const { form, isLoading, error, onSubmit, handleOAuthLogin } = useLoginForm({
+  const { form, isLoading, error, onSubmit } = useLoginForm({
     initialError,
   })
 
@@ -38,19 +37,6 @@ export function LoginPage({ error: initialError }: LoginPageProps) {
           )}
 
           <LoginForm form={form} isLoading={isLoading} onSubmit={onSubmit} />
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">
-                Or continue with
-              </span>
-            </div>
-          </div>
-
-          <OAuthButtons isLoading={isLoading} onOAuthLogin={handleOAuthLogin} />
 
           <div className="text-center text-sm">
             <Link

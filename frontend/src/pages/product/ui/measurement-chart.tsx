@@ -22,7 +22,7 @@ import {
 } from '@/shared/components/ui/card'
 import { Button } from '@/shared/components/ui/button'
 import { Skeleton } from '@/shared/components/ui/skeleton'
-import type { MeasurementSummary } from '@/shared/api/measurements'
+import type { MeasurementSummary } from '@/shared/api/generated/models'
 import { useMeasurementChart } from '../hooks/use-measurement-chart'
 import { ChartToolbar } from './chart-toolbar'
 import { ChartContextBar } from './chart-context-bar'
@@ -114,7 +114,7 @@ export function MeasurementChart({
     activeFilterCount,
   } = useMeasurementChart({
     productId,
-    measurementName: measurement.name,
+    measurementName: measurement.name ?? '',
   })
 
   const commonAxisProps = {

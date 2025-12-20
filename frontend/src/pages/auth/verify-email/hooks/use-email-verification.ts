@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { authApi } from '@/shared/api/auth'
+import { postAuthVerifyEmail } from '@/shared/api/generated/api'
 import { ApiError } from '@/shared/api/client'
 
 type VerificationStatus = 'loading' | 'success' | 'error'
@@ -17,7 +17,7 @@ export function useEmailVerification(token: string) {
 
     const verifyEmail = async () => {
       try {
-        await authApi.verifyEmail(token)
+        await postAuthVerifyEmail({ token })
         setStatus('success')
       } catch (err) {
         setStatus('error')

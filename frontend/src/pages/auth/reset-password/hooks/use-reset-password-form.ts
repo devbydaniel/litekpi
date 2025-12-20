@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { authApi } from '@/shared/api/auth'
+import { usePostAuthForgotPassword } from '@/shared/api/generated/api'
 import { ApiError } from '@/shared/api/client'
 
 const resetPasswordSchema = z.object({
@@ -12,9 +12,24 @@ const resetPasswordSchema = z.object({
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>
 
 export function useResetPasswordForm() {
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  const forgotPasswordMutation = usePostAuthForgotPassword({
+    mutation: {
+      onSuccess: () => {
+        setSuccess(true)
+      },
+      onError: (err) => {
+        if (err instanceof ApiError) {
+          const data = err.data as { error?: string }
+          setError(data.error || 'Request failed')
+        } else {
+          setError('An unexpected error occurred')
+        }
+      },
+    },
+  })
 
   const form = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -25,26 +40,12 @@ export function useResetPasswordForm() {
 
   const onSubmit = async (values: ResetPasswordFormValues) => {
     setError(null)
-    setIsLoading(true)
-
-    try {
-      await authApi.forgotPassword(values.email)
-      setSuccess(true)
-    } catch (err) {
-      if (err instanceof ApiError) {
-        const data = err.data as { error?: string }
-        setError(data.error || 'Request failed')
-      } else {
-        setError('An unexpected error occurred')
-      }
-    } finally {
-      setIsLoading(false)
-    }
+    await forgotPasswordMutation.mutateAsync({ data: { email: values.email } })
   }
 
   return {
     form,
-    isLoading,
+    isLoading: forgotPasswordMutation.isPending,
     error,
     success,
     onSubmit,

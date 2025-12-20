@@ -5,7 +5,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select'
-import type { MetadataValues } from '@/shared/api/measurements'
+import type { MetadataValues } from '@/shared/api/generated/models'
 
 interface SplitBySelectorProps {
   metadata: MetadataValues[]
@@ -29,7 +29,7 @@ export function SplitBySelector({ metadata, value, onChange }: SplitBySelectorPr
       <SelectContent>
         <SelectItem value="none">No split</SelectItem>
         {metadata.map((meta) => (
-          <SelectItem key={meta.key} value={meta.key}>
+          <SelectItem key={meta.key} value={meta.key ?? ''}>
             {meta.key}
           </SelectItem>
         ))}

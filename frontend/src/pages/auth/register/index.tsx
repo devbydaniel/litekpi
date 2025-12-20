@@ -10,13 +10,11 @@ import {
   CardTitle,
 } from '@/shared/components/ui/card'
 import { StatusCard } from '@/shared/components/ui/status-card'
-import { OAuthButtons } from '@/shared/components/auth/oauth-buttons'
 import { useRegisterForm } from './hooks/use-register-form'
 import { RegisterForm } from './ui/register-form'
 
 export function RegisterPage() {
-  const { form, isLoading, error, success, email, onSubmit, handleOAuthLogin } =
-    useRegisterForm()
+  const { form, isLoading, error, success, email, onSubmit } = useRegisterForm()
 
   if (success) {
     return (
@@ -55,19 +53,6 @@ export function RegisterPage() {
           )}
 
           <RegisterForm form={form} isLoading={isLoading} onSubmit={onSubmit} />
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">
-                Or continue with
-              </span>
-            </div>
-          </div>
-
-          <OAuthButtons isLoading={isLoading} onOAuthLogin={handleOAuthLogin} />
 
           <div className="text-center text-sm">
             Already have an account?{' '}

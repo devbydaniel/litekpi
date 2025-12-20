@@ -18,7 +18,7 @@ import {
   ItemTitle,
 } from '@/shared/components/ui/item'
 import { Skeleton } from '@/shared/components/ui/skeleton'
-import type { Product } from '@/shared/types'
+import type { Product } from '@/shared/api/generated/models'
 
 interface ProductListProps {
   products: Product[]
@@ -78,7 +78,7 @@ function ProductListItem({
     <Item className="group">
       <Link
         to="/products/$productId"
-        params={{ productId: product.id }}
+        params={{ productId: product.id ?? '' }}
         className="flex flex-1 items-center gap-4"
       >
         <ItemContent>
@@ -86,7 +86,7 @@ function ProductListItem({
             {product.name}
           </ItemTitle>
           <ItemDescription>
-            Created {new Date(product.createdAt).toLocaleDateString()}
+            Created {product.createdAt ? new Date(product.createdAt).toLocaleDateString() : '-'}
           </ItemDescription>
         </ItemContent>
         <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />

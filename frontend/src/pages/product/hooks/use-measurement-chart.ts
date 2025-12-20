@@ -1,18 +1,45 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  measurementsApi,
-  isSplitResponse,
-  type SplitSeries,
-  type ChartType,
-  type MeasurementPreferences,
-} from '@/shared/api/measurements'
+  useGetProductsProductIdMeasurementsNamePreferences,
+  useGetProductsProductIdMeasurementsNameMetadata,
+  usePostProductsProductIdMeasurementsNamePreferences,
+  getGetProductsProductIdMeasurementsNamePreferencesQueryKey,
+} from '@/shared/api/generated/api'
+import type { AggregatedDataPoint } from '@/shared/api/generated/models'
+import { customInstance } from '@/shared/api/client'
 import { type DateRangeValue, getDateRangeFromValue } from '../ui/date-range-filter'
 
 interface UseMeasurementChartOptions {
   productId: string
   measurementName: string
+}
+
+export type ChartType = 'area' | 'bar' | 'line'
+
+interface SplitSeries {
+  key: string
+  dataPoints: AggregatedDataPoint[]
+}
+
+interface GetMeasurementDataResponse {
+  name: string
+  dataPoints: AggregatedDataPoint[]
+}
+
+interface GetMeasurementDataSplitResponse {
+  name: string
+  splitBy: string
+  series: SplitSeries[]
+}
+
+type GetMeasurementDataResult = GetMeasurementDataResponse | GetMeasurementDataSplitResponse
+
+function isSplitResponse(
+  response: GetMeasurementDataResult
+): response is GetMeasurementDataSplitResponse {
+  return 'series' in response
 }
 
 // Transform split data for Recharts (pivot to { date, key1: sum, key2: sum, ... })
@@ -24,11 +51,12 @@ function transformSplitData(series: SplitSeries[]) {
 
   for (const s of series) {
     for (const dp of s.dataPoints) {
+      if (!dp.date) continue
       if (!dateMap.has(dp.date)) {
         dateMap.set(dp.date, { date: dp.date })
       }
       const entry = dateMap.get(dp.date)!
-      entry[s.key] = dp.sum
+      entry[s.key] = dp.sum ?? 0
     }
   }
 
@@ -40,6 +68,40 @@ function transformSplitData(series: SplitSeries[]) {
   return { data, seriesKeys }
 }
 
+// Custom fetch for measurement data with metadata filter support
+async function fetchMeasurementData(
+  productId: string,
+  name: string,
+  params: {
+    start: string
+    end: string
+    metadata?: Record<string, string>
+    splitBy?: string
+  }
+): Promise<GetMeasurementDataResult> {
+  const queryParams: Record<string, string> = {
+    start: params.start,
+    end: params.end,
+  }
+
+  // Add metadata filters with "metadata." prefix
+  if (params.metadata) {
+    for (const [key, value] of Object.entries(params.metadata)) {
+      queryParams[`metadata.${key}`] = value
+    }
+  }
+
+  if (params.splitBy) {
+    queryParams.splitBy = params.splitBy
+  }
+
+  return customInstance<GetMeasurementDataResult>({
+    url: `/products/${productId}/measurements/${encodeURIComponent(name)}/data`,
+    method: 'GET',
+    params: queryParams,
+  })
+}
+
 export function useMeasurementChart({ productId, measurementName }: UseMeasurementChartOptions) {
   const queryClient = useQueryClient()
   const [chartType, setChartType] = useState<ChartType>('area')
@@ -49,49 +111,56 @@ export function useMeasurementChart({ productId, measurementName }: UseMeasureme
   const [preferencesApplied, setPreferencesApplied] = useState(false)
 
   // Fetch saved preferences
-  const { data: preferencesData } = useQuery({
-    queryKey: ['measurements', productId, measurementName, 'preferences'],
-    queryFn: () => measurementsApi.getPreferences(productId, measurementName),
-  })
+  const { data: preferencesData } = useGetProductsProductIdMeasurementsNamePreferences(
+    productId,
+    measurementName
+  )
 
   // Apply preferences when they load (only once)
   useEffect(() => {
     if (preferencesData?.preferences && !preferencesApplied) {
       const prefs = preferencesData.preferences
-      setChartType(prefs.chartType)
-      setDateRange(prefs.dateRange)
+      setChartType((prefs.chartType as ChartType) ?? 'area')
+      setDateRange((prefs.dateRange as DateRangeValue) ?? 'last7days')
       setSplitBy(prefs.splitBy ?? undefined)
-      setMetadataFilters(prefs.metadataFilters ?? {})
+      setMetadataFilters((prefs.metadataFilters as Record<string, string>) ?? {})
       setPreferencesApplied(true)
     }
   }, [preferencesData, preferencesApplied])
 
   // Save preferences mutation
-  const savePreferencesMutation = useMutation({
-    mutationFn: (prefs: MeasurementPreferences) =>
-      measurementsApi.savePreferences(productId, measurementName, prefs),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['measurements', productId, measurementName, 'preferences'],
-      })
-      toast.success('Default view saved')
+  const savePreferencesMutation = usePostProductsProductIdMeasurementsNamePreferences({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: getGetProductsProductIdMeasurementsNamePreferencesQueryKey(
+            productId,
+            measurementName
+          ),
+        })
+        toast.success('Default view saved')
+      },
     },
   })
 
   const savePreferences = useCallback(() => {
     savePreferencesMutation.mutate({
-      chartType,
-      dateRange,
-      splitBy: splitBy ?? null,
-      metadataFilters,
+      productId,
+      name: measurementName,
+      data: {
+        preferences: {
+          chartType,
+          dateRange,
+          splitBy: splitBy ?? undefined,
+          metadataFilters,
+        },
+      },
     })
-  }, [chartType, dateRange, splitBy, metadataFilters, savePreferencesMutation])
+  }, [productId, measurementName, chartType, dateRange, splitBy, metadataFilters, savePreferencesMutation])
 
   // Fetch metadata values for filter dropdowns
-  const { data: metadataData, isLoading: isLoadingMetadata } = useQuery({
-    queryKey: ['measurements', productId, measurementName, 'metadata'],
-    queryFn: () => measurementsApi.getMetadataValues(productId, measurementName),
-  })
+  const { data: metadataData, isLoading: isLoadingMetadata } =
+    useGetProductsProductIdMeasurementsNameMetadata(productId, measurementName)
 
   // Calculate start and end dates from date range preset
   const { start, end } = useMemo(() => getDateRangeFromValue(dateRange), [dateRange])
@@ -107,7 +176,7 @@ export function useMeasurementChart({ productId, measurementName }: UseMeasureme
     return clean
   }, [metadataFilters])
 
-  // Fetch chart data based on current filters
+  // Fetch chart data based on current filters (using custom fetch for metadata filter support)
   const { data: chartData, isLoading: isLoadingData } = useQuery({
     queryKey: [
       'measurements',
@@ -119,7 +188,7 @@ export function useMeasurementChart({ productId, measurementName }: UseMeasureme
       splitBy,
     ],
     queryFn: () =>
-      measurementsApi.getData(productId, measurementName, {
+      fetchMeasurementData(productId, measurementName, {
         start: start.toISOString(),
         end: end.toISOString(),
         metadata: Object.keys(cleanMetadataFilters).length > 0 ? cleanMetadataFilters : undefined,

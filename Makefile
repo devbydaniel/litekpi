@@ -155,7 +155,7 @@ lint:
 
 # Generate Swagger/OpenAPI spec from Go annotations
 swagger:
-	cd backend && go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs --parseDependency
+	cd backend && go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs --parseDependency --st
 
 # Generate TypeScript API client from OpenAPI spec
 api-gen: swagger

@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
-import { productsApi } from '@/shared/api/products'
-import { measurementsApi } from '@/shared/api/measurements'
+import {
+  useGetProductsId,
+  useGetProductsProductIdMeasurements,
+} from '@/shared/api/generated/api'
 
 interface UseProductDetailOptions {
   productId: string
@@ -12,20 +13,17 @@ export function useProductDetail({ productId }: UseProductDetailOptions) {
     data: product,
     isLoading: isLoadingProduct,
     error: productError,
-  } = useQuery({
-    queryKey: ['products', productId],
-    queryFn: () => productsApi.get(productId),
-  })
+  } = useGetProductsId(productId)
 
   // Fetch measurement names
   const {
     data: measurementsData,
     isLoading: isLoadingMeasurements,
     error: measurementsError,
-  } = useQuery({
-    queryKey: ['measurements', productId],
-    queryFn: () => measurementsApi.listNames(productId),
-    enabled: !!product,
+  } = useGetProductsProductIdMeasurements(productId, {
+    query: {
+      enabled: !!product,
+    },
   })
 
   return {
