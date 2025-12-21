@@ -18,6 +18,7 @@ import (
 	"github.com/devbydaniel/litekpi/internal/kpi"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
+	"github.com/devbydaniel/litekpi/internal/platform/email"
 	"github.com/devbydaniel/litekpi/internal/report"
 
 	_ "github.com/devbydaniel/litekpi/docs" // Swagger docs
@@ -47,15 +48,15 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	// Initialize auth module
 	authRepo := auth.NewRepository(db.Pool)
 	jwtService := auth.NewJWTService(cfg.JWTSecret)
-	emailService := auth.NewEmailService(auth.EmailConfig{
+	emailService := email.NewService(email.Config{
 		Host:     cfg.SMTP.Host,
 		Port:     cfg.SMTP.Port,
 		User:     cfg.SMTP.User,
 		Password: cfg.SMTP.Password,
 		From:     cfg.SMTP.From,
-		AppURL:   cfg.AppURL,
 	})
-	authService := auth.NewService(authRepo, jwtService, emailService, cfg)
+	authEmailer := auth.NewAuthEmailer(emailService, cfg.AppURL)
+	authService := auth.NewService(authRepo, jwtService, authEmailer, cfg)
 	authHandler := auth.NewHandler(authService)
 
 	// Initialize data source module

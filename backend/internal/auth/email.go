@@ -2,56 +2,32 @@ package auth
 
 import (
 	"fmt"
-	"net/smtp"
 	"strings"
+
+	"github.com/devbydaniel/litekpi/internal/platform/email"
 )
 
-// EmailConfig holds email service configuration.
-type EmailConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	From     string
-	AppURL   string
+// AuthEmailer handles sending auth-related emails.
+type AuthEmailer struct {
+	svc    *email.Service
+	appURL string
 }
 
-// EmailService handles sending emails.
-type EmailService struct {
-	host     string
-	port     int
-	user     string
-	password string
-	from     string
-	appURL   string
-	enabled  bool
-}
-
-// NewEmailService creates a new email service.
-func NewEmailService(cfg EmailConfig) *EmailService {
-	enabled := cfg.Host != "" && cfg.From != ""
-	return &EmailService{
-		host:     cfg.Host,
-		port:     cfg.Port,
-		user:     cfg.User,
-		password: cfg.Password,
-		from:     cfg.From,
-		appURL:   strings.TrimSuffix(cfg.AppURL, "/"),
-		enabled:  enabled,
+// NewAuthEmailer creates a new auth emailer.
+func NewAuthEmailer(svc *email.Service, appURL string) *AuthEmailer {
+	return &AuthEmailer{
+		svc:    svc,
+		appURL: strings.TrimSuffix(appURL, "/"),
 	}
 }
 
 // IsEnabled returns true if email service is configured.
-func (e *EmailService) IsEnabled() bool {
-	return e.enabled
+func (e *AuthEmailer) IsEnabled() bool {
+	return e.svc.IsEnabled()
 }
 
 // SendVerificationEmail sends an email verification link.
-func (e *EmailService) SendVerificationEmail(to, token string) error {
-	if !e.enabled {
-		return nil // Silently skip if email not configured
-	}
-
+func (e *AuthEmailer) SendVerificationEmail(to, token string) error {
 	subject := "Verify your LiteKPI account"
 	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", e.appURL, token)
 
@@ -68,15 +44,11 @@ If you didn't create a LiteKPI account, you can safely ignore this email.
 Thanks,
 The LiteKPI Team`, verifyURL)
 
-	return e.sendEmail(to, subject, body)
+	return e.svc.Send(to, subject, body)
 }
 
 // SendPasswordResetEmail sends a password reset link.
-func (e *EmailService) SendPasswordResetEmail(to, token string) error {
-	if !e.enabled {
-		return nil // Silently skip if email not configured
-	}
-
+func (e *AuthEmailer) SendPasswordResetEmail(to, token string) error {
 	subject := "Reset your LiteKPI password"
 	resetURL := fmt.Sprintf("%s/new-password?token=%s", e.appURL, token)
 
@@ -93,15 +65,11 @@ If you didn't request a password reset, you can safely ignore this email.
 Thanks,
 The LiteKPI Team`, resetURL)
 
-	return e.sendEmail(to, subject, body)
+	return e.svc.Send(to, subject, body)
 }
 
 // SendInviteEmail sends an invitation email.
-func (e *EmailService) SendInviteEmail(to, token, inviterName, orgName string) error {
-	if !e.enabled {
-		return nil // Silently skip if email not configured
-	}
-
+func (e *AuthEmailer) SendInviteEmail(to, token, inviterName, orgName string) error {
 	subject := fmt.Sprintf("You've been invited to join %s on LiteKPI", orgName)
 	inviteURL := fmt.Sprintf("%s/accept-invite?token=%s", e.appURL, token)
 
@@ -118,19 +86,5 @@ This invitation will expire in 7 days.
 Thanks,
 The LiteKPI Team`, inviterName, orgName, inviteURL)
 
-	return e.sendEmail(to, subject, body)
-}
-
-func (e *EmailService) sendEmail(to, subject, body string) error {
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		e.from, to, subject, body)
-
-	addr := fmt.Sprintf("%s:%d", e.host, e.port)
-
-	var auth smtp.Auth
-	if e.user != "" && e.password != "" {
-		auth = smtp.PlainAuth("", e.user, e.password, e.host)
-	}
-
-	return smtp.SendMail(addr, auth, e.from, []string{to}, []byte(msg))
+	return e.svc.Send(to, subject, body)
 }

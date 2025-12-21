@@ -42,14 +42,14 @@ const (
 type Service struct {
 	repo        *Repository
 	jwt         *JWTService
-	email       *EmailService
+	email       *AuthEmailer
 	googleOAuth *oauth2.Config
 	githubOAuth *oauth2.Config
 	appURL      string
 }
 
 // NewService creates a new auth service.
-func NewService(repo *Repository, jwt *JWTService, email *EmailService, cfg *config.Config) *Service {
+func NewService(repo *Repository, jwt *JWTService, email *AuthEmailer, cfg *config.Config) *Service {
 	svc := &Service{
 		repo:   repo,
 		jwt:    jwt,
