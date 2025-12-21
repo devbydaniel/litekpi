@@ -21,7 +21,7 @@ func NewService(repo *Repository) *Service {
 }
 
 // IngestSingle validates and ingests a single measurement.
-func (s *Service) IngestSingle(ctx context.Context, productID uuid.UUID, req IngestRequest) (*IngestResponse, error) {
+func (s *Service) IngestSingle(ctx context.Context, dataSourceID uuid.UUID, req IngestRequest) (*IngestResponse, error) {
 	// Validate metric name
 	if err := validateMetricName(req.Name); err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func (s *Service) IngestSingle(ctx context.Context, productID uuid.UUID, req Ing
 	}
 
 	// Create measurement
-	measurement, err := s.repo.CreateMeasurement(ctx, productID, req.Name, req.Value, timestamp, req.Metadata)
+	measurement, err := s.repo.CreateMeasurement(ctx, dataSourceID, req.Name, req.Value, timestamp, req.Metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (s *Service) IngestSingle(ctx context.Context, productID uuid.UUID, req Ing
 }
 
 // IngestBatch validates and ingests multiple measurements atomically.
-func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req BatchIngestRequest) (*BatchIngestResponse, error) {
+func (s *Service) IngestBatch(ctx context.Context, dataSourceID uuid.UUID, req BatchIngestRequest) (*BatchIngestResponse, error) {
 	// Validate batch size
 	if len(req.Metrics) == 0 {
 		return nil, &validationError{
@@ -125,7 +125,7 @@ func (s *Service) IngestBatch(ctx context.Context, productID uuid.UUID, req Batc
 	}
 
 	// Insert all measurements
-	count, err := s.repo.CreateMeasurementsBatch(ctx, productID, req.Metrics, timestamps)
+	count, err := s.repo.CreateMeasurementsBatch(ctx, dataSourceID, req.Metrics, timestamps)
 	if err != nil {
 		return nil, err
 	}
@@ -238,19 +238,19 @@ func validateMetadata(metadata map[string]string) error {
 	return nil
 }
 
-// GetMeasurementNames retrieves distinct measurement names with their metadata keys for a product.
-func (s *Service) GetMeasurementNames(ctx context.Context, productID uuid.UUID) ([]MeasurementSummary, error) {
-	return s.repo.GetMeasurementNames(ctx, productID)
+// GetMeasurementNames retrieves distinct measurement names with their metadata keys for a data source.
+func (s *Service) GetMeasurementNames(ctx context.Context, dataSourceID uuid.UUID) ([]MeasurementSummary, error) {
+	return s.repo.GetMeasurementNames(ctx, dataSourceID)
 }
 
 // GetMetadataValues retrieves all unique metadata key-value combinations for a specific measurement.
-func (s *Service) GetMetadataValues(ctx context.Context, productID uuid.UUID, measurementName string) ([]MetadataValues, error) {
-	return s.repo.GetMetadataValues(ctx, productID, measurementName)
+func (s *Service) GetMetadataValues(ctx context.Context, dataSourceID uuid.UUID, measurementName string) ([]MetadataValues, error) {
+	return s.repo.GetMetadataValues(ctx, dataSourceID, measurementName)
 }
 
 // GetAggregatedMeasurements retrieves daily aggregated values with optional metadata filtering.
-func (s *Service) GetAggregatedMeasurements(ctx context.Context, productID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string) ([]AggregatedDataPoint, error) {
-	return s.repo.GetAggregatedMeasurements(ctx, productID, name, startDate, endDate, metadataFilters)
+func (s *Service) GetAggregatedMeasurements(ctx context.Context, dataSourceID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string) ([]AggregatedDataPoint, error) {
+	return s.repo.GetAggregatedMeasurements(ctx, dataSourceID, name, startDate, endDate, metadataFilters)
 }
 
 // maxSplitSeries is the maximum number of distinct series to return before grouping into "Other".
@@ -258,9 +258,9 @@ const maxSplitSeries = 10
 
 // GetAggregatedMeasurementsSplitBy retrieves daily aggregated values split by a metadata key.
 // Keeps top 10 series by total sum and aggregates the rest into "Other".
-func (s *Service) GetAggregatedMeasurementsSplitBy(ctx context.Context, productID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, splitByKey string) ([]SplitSeries, error) {
+func (s *Service) GetAggregatedMeasurementsSplitBy(ctx context.Context, dataSourceID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, splitByKey string) ([]SplitSeries, error) {
 	// Get raw split data from repository
-	series, err := s.repo.GetAggregatedMeasurementsSplitBy(ctx, productID, name, startDate, endDate, metadataFilters, splitByKey)
+	series, err := s.repo.GetAggregatedMeasurementsSplitBy(ctx, dataSourceID, name, startDate, endDate, metadataFilters, splitByKey)
 	if err != nil {
 		return nil, err
 	}
@@ -354,36 +354,4 @@ func sortSeriesByTotal(series []SplitSeries) []SplitSeries {
 		result[i] = s.series
 	}
 	return result
-}
-
-// Valid chart type and date range values
-var (
-	validChartTypes = map[string]bool{"area": true, "bar": true, "line": true}
-	validDateRanges = map[string]bool{"last24h": true, "last7days": true, "last30days": true}
-)
-
-// GetPreferences retrieves saved chart preferences for a measurement.
-func (s *Service) GetPreferences(ctx context.Context, productID uuid.UUID, measurementName string) (*MeasurementPreferences, error) {
-	return s.repo.GetPreferences(ctx, productID, measurementName)
-}
-
-// SavePreferences saves chart preferences for a measurement after validation.
-func (s *Service) SavePreferences(ctx context.Context, productID uuid.UUID, measurementName string, prefs *MeasurementPreferences) error {
-	// Validate chart type
-	if !validChartTypes[prefs.ChartType] {
-		return &validationError{
-			errorType: "validation_failed",
-			message:   fmt.Sprintf("Invalid chart type '%s': must be one of area, bar, line", prefs.ChartType),
-		}
-	}
-
-	// Validate date range
-	if !validDateRanges[prefs.DateRange] {
-		return &validationError{
-			errorType: "validation_failed",
-			message:   fmt.Sprintf("Invalid date range '%s': must be one of last24h, last7days, last30days", prefs.DateRange),
-		}
-	}
-
-	return s.repo.SavePreferences(ctx, productID, measurementName, prefs)
 }

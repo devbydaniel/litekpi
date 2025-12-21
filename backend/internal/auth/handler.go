@@ -9,6 +9,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // Handler handles HTTP requests for authentication.
@@ -473,6 +476,377 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 //	@Router			/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, MessageResponse{Message: "Logged out successfully"})
+}
+
+// GetEmailConfig returns email configuration status.
+//
+//	@Summary		Get email config status
+//	@Description	Check if email is configured
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	EmailConfigResponse
+//	@Security		BearerAuth
+//	@Router			/auth/email-config [get]
+func (h *Handler) GetEmailConfig(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, EmailConfigResponse{Enabled: h.service.IsEmailEnabled()})
+}
+
+// CreateInvite creates a new invite.
+//
+//	@Summary		Create invite
+//	@Description	Create a new user invite
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		CreateInviteRequest	true	"Invite data"
+//	@Success		201		{object}	CreateInviteResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		409		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/invites [post]
+func (h *Handler) CreateInvite(w http.ResponseWriter, r *http.Request) {
+	user := UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req CreateInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Email == "" {
+		respondError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+	if req.Role == "" {
+		respondError(w, http.StatusBadRequest, "role is required")
+		return
+	}
+	if req.Role != RoleAdmin && req.Role != RoleEditor && req.Role != RoleViewer {
+		respondError(w, http.StatusBadRequest, "invalid role")
+		return
+	}
+
+	resp, err := h.service.CreateInvite(r.Context(), req, user)
+	if err != nil {
+		if errors.Is(err, ErrUserAlreadyExists) {
+			respondError(w, http.StatusConflict, "user with this email already exists")
+			return
+		}
+		if errors.Is(err, ErrPendingInviteExists) {
+			respondError(w, http.StatusConflict, "a pending invite already exists for this email")
+			return
+		}
+		log.Printf("create invite error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to create invite")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, resp)
+}
+
+// ListInvites lists pending invites.
+//
+//	@Summary		List invites
+//	@Description	List pending invites for the organization
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	ListInvitesResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		403	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/invites [get]
+func (h *Handler) ListInvites(w http.ResponseWriter, r *http.Request) {
+	user := UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	invites, err := h.service.ListInvites(r.Context(), user.OrganizationID)
+	if err != nil {
+		log.Printf("list invites error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to list invites")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, ListInvitesResponse{Invites: invites})
+}
+
+// CancelInvite cancels a pending invite.
+//
+//	@Summary		Cancel invite
+//	@Description	Cancel a pending invite
+//	@Tags			auth
+//	@Produce		json
+//	@Param			id	path		string	true	"Invite ID"
+//	@Success		200	{object}	MessageResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		403	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/invites/{id} [delete]
+func (h *Handler) CancelInvite(w http.ResponseWriter, r *http.Request) {
+	user := UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	inviteID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid invite id")
+		return
+	}
+
+	err = h.service.CancelInvite(r.Context(), inviteID, user.OrganizationID)
+	if err != nil {
+		if errors.Is(err, ErrInviteNotFound) {
+			respondError(w, http.StatusNotFound, "invite not found")
+			return
+		}
+		if errors.Is(err, ErrInviteAlreadyUsed) {
+			respondError(w, http.StatusBadRequest, "invite has already been accepted")
+			return
+		}
+		log.Printf("cancel invite error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to cancel invite")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, MessageResponse{Message: "Invite cancelled"})
+}
+
+// ValidateInvite validates an invite token.
+//
+//	@Summary		Validate invite
+//	@Description	Validate an invite token and get invite info
+//	@Tags			auth
+//	@Produce		json
+//	@Param			token	query		string	true	"Invite token"
+//	@Success		200		{object}	ValidateInviteResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Router			/auth/invites/validate [get]
+func (h *Handler) ValidateInvite(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		respondError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	resp, err := h.service.ValidateInvite(r.Context(), token)
+	if err != nil {
+		log.Printf("validate invite error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to validate invite")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+// AcceptInvite accepts an invite and creates a user.
+//
+//	@Summary		Accept invite
+//	@Description	Accept an invite and create a user account
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		AcceptInviteRequest	true	"Accept invite data"
+//	@Success		201		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		409		{object}	ErrorResponse
+//	@Router			/auth/invites/accept [post]
+func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	var req AcceptInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		respondError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+	if req.Name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.Password == "" {
+		respondError(w, http.StatusBadRequest, "password is required")
+		return
+	}
+	if len(req.Password) < 8 {
+		respondError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+
+	_, err := h.service.AcceptInvite(r.Context(), req)
+	if err != nil {
+		if errors.Is(err, ErrInviteNotFound) {
+			respondError(w, http.StatusBadRequest, "invalid invite token")
+			return
+		}
+		if errors.Is(err, ErrInviteExpired) {
+			respondError(w, http.StatusBadRequest, "invite has expired")
+			return
+		}
+		if errors.Is(err, ErrInviteAlreadyUsed) {
+			respondError(w, http.StatusBadRequest, "invite has already been used")
+			return
+		}
+		if errors.Is(err, ErrEmailAlreadyExists) {
+			respondError(w, http.StatusConflict, "email already exists")
+			return
+		}
+		log.Printf("accept invite error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to accept invite")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, MessageResponse{Message: "Account created successfully. You can now log in."})
+}
+
+// ListUsers lists organization users.
+//
+//	@Summary		List users
+//	@Description	List all users in the organization
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	ListUsersResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/users [get]
+func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	user := UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	users, err := h.service.ListUsers(r.Context(), user.OrganizationID)
+	if err != nil {
+		log.Printf("list users error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to list users")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, ListUsersResponse{Users: users})
+}
+
+// UpdateUserRole updates a user's role.
+//
+//	@Summary		Update user role
+//	@Description	Update a user's role in the organization
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"User ID"
+//	@Param			request	body		UpdateUserRoleRequest	true	"Role data"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/users/{id}/role [patch]
+func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	user := UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	userID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	var req UpdateUserRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Role == "" {
+		respondError(w, http.StatusBadRequest, "role is required")
+		return
+	}
+	if req.Role != RoleAdmin && req.Role != RoleEditor && req.Role != RoleViewer {
+		respondError(w, http.StatusBadRequest, "invalid role")
+		return
+	}
+
+	err = h.service.UpdateUserRole(r.Context(), userID, req.Role, user)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			respondError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if errors.Is(err, ErrLastAdmin) {
+			respondError(w, http.StatusBadRequest, "cannot demote the last admin")
+			return
+		}
+		log.Printf("update user role error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to update user role")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, MessageResponse{Message: "User role updated"})
+}
+
+// RemoveUser removes a user from the organization.
+//
+//	@Summary		Remove user
+//	@Description	Remove a user from the organization
+//	@Tags			auth
+//	@Produce		json
+//	@Param			id	path		string	true	"User ID"
+//	@Success		200	{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/auth/users/{id} [delete]
+func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
+	user := UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	userID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	err = h.service.RemoveUser(r.Context(), userID, user)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			respondError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if errors.Is(err, ErrCannotRemoveSelf) {
+			respondError(w, http.StatusBadRequest, "cannot remove yourself")
+			return
+		}
+		if errors.Is(err, ErrLastAdmin) {
+			respondError(w, http.StatusBadRequest, "cannot remove the last admin")
+			return
+		}
+		log.Printf("remove user error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to remove user")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, MessageResponse{Message: "User removed"})
 }
 
 func (h *Handler) redirectWithOAuthResult(w http.ResponseWriter, r *http.Request, result *OAuthResult) {

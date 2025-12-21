@@ -6,16 +6,16 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"github.com/devbydaniel/litekpi/internal/product"
+	"github.com/devbydaniel/litekpi/internal/datasource"
 )
 
 type contextKey string
 
-// ProductContextKey is the context key for the authenticated product.
-const ProductContextKey contextKey = "product"
+// DataSourceContextKey is the context key for the authenticated data source.
+const DataSourceContextKey contextKey = "dataSource"
 
 // APIKeyMiddleware creates a middleware that validates API keys.
-func APIKeyMiddleware(productRepo *product.Repository) func(http.Handler) http.Handler {
+func APIKeyMiddleware(dsRepo *datasource.Repository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			apiKey := r.Header.Get("X-API-Key")
@@ -28,28 +28,28 @@ func APIKeyMiddleware(productRepo *product.Repository) func(http.Handler) http.H
 			hashBytes := sha256.Sum256([]byte(apiKey))
 			keyHash := hex.EncodeToString(hashBytes[:])
 
-			// Look up product by hash
-			prod, err := productRepo.GetProductByAPIKeyHash(r.Context(), keyHash)
+			// Look up data source by hash
+			ds, err := dsRepo.GetDataSourceByAPIKeyHash(r.Context(), keyHash)
 			if err != nil {
 				respondError(w, http.StatusInternalServerError, "internal_error", "failed to validate API key")
 				return
 			}
-			if prod == nil {
+			if ds == nil {
 				respondError(w, http.StatusUnauthorized, "unauthorized", "invalid API key")
 				return
 			}
 
-			// Add product to context
-			ctx := context.WithValue(r.Context(), ProductContextKey, prod)
+			// Add data source to context
+			ctx := context.WithValue(r.Context(), DataSourceContextKey, ds)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// ProductFromContext retrieves the product from the request context.
-func ProductFromContext(ctx context.Context) *product.Product {
-	prod, _ := ctx.Value(ProductContextKey).(*product.Product)
-	return prod
+// DataSourceFromContext retrieves the data source from the request context.
+func DataSourceFromContext(ctx context.Context) *datasource.DataSource {
+	ds, _ := ctx.Value(DataSourceContextKey).(*datasource.DataSource)
+	return ds
 }
 
 func respondError(w http.ResponseWriter, status int, errorType, message string) {

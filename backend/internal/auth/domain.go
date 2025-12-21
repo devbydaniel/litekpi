@@ -145,3 +145,78 @@ type OAuthPendingSetupResponse struct {
 	Email        string `json:"email"`
 	ProviderName string `json:"providerName,omitempty"`
 }
+
+// Invite represents a pending user invitation.
+type Invite struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organizationId"`
+	Email          string     `json:"email"`
+	Role           Role       `json:"role"`
+	Token          string     `json:"-"` // Never expose token in API responses
+	InvitedBy      uuid.UUID  `json:"invitedBy"`
+	ExpiresAt      time.Time  `json:"expiresAt"`
+	AcceptedAt     *time.Time `json:"acceptedAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+}
+
+// InviteWithInviter includes inviter info for display.
+type InviteWithInviter struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organizationId"`
+	Email          string     `json:"email"`
+	Role           Role       `json:"role"`
+	InvitedBy      uuid.UUID  `json:"invitedBy"`
+	InviterName    string     `json:"inviterName"`
+	InviterEmail   string     `json:"inviterEmail"`
+	ExpiresAt      time.Time  `json:"expiresAt"`
+	AcceptedAt     *time.Time `json:"acceptedAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+}
+
+// CreateInviteRequest is the request body for creating an invite.
+type CreateInviteRequest struct {
+	Email string `json:"email" validate:"required,email"`
+	Role  Role   `json:"role" validate:"required,oneof=admin editor viewer"`
+}
+
+// CreateInviteResponse is the response body for creating an invite.
+type CreateInviteResponse struct {
+	Invite    Invite  `json:"invite"`
+	InviteURL *string `json:"inviteUrl,omitempty"` // Only present if email not configured
+}
+
+// ListInvitesResponse is the response body for listing invites.
+type ListInvitesResponse struct {
+	Invites []InviteWithInviter `json:"invites"`
+}
+
+// ListUsersResponse is the response body for listing organization users.
+type ListUsersResponse struct {
+	Users []User `json:"users"`
+}
+
+// ValidateInviteResponse is the response body for validating an invite token.
+type ValidateInviteResponse struct {
+	Valid            bool   `json:"valid"`
+	Email            string `json:"email,omitempty"`
+	OrganizationName string `json:"organizationName,omitempty"`
+	Role             Role   `json:"role,omitempty"`
+	InviterName      string `json:"inviterName,omitempty"`
+}
+
+// AcceptInviteRequest is the request body for accepting an invite.
+type AcceptInviteRequest struct {
+	Token    string `json:"token" validate:"required"`
+	Name     string `json:"name" validate:"required"`
+	Password string `json:"password" validate:"required,min=8"`
+}
+
+// UpdateUserRoleRequest is the request body for updating a user's role.
+type UpdateUserRoleRequest struct {
+	Role Role `json:"role" validate:"required,oneof=admin editor viewer"`
+}
+
+// EmailConfigResponse indicates whether email is configured.
+type EmailConfigResponse struct {
+	Enabled bool `json:"enabled"`
+}

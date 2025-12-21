@@ -12,18 +12,18 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/devbydaniel/litekpi/internal/auth"
-	"github.com/devbydaniel/litekpi/internal/product"
+	"github.com/devbydaniel/litekpi/internal/datasource"
 )
 
 // Handler handles HTTP requests for measurement ingestion.
 type Handler struct {
-	service        *Service
-	productService *product.Service
+	service          *Service
+	dataSourceService *datasource.Service
 }
 
 // NewHandler creates a new ingest handler.
-func NewHandler(service *Service, productService *product.Service) *Handler {
-	return &Handler{service: service, productService: productService}
+func NewHandler(service *Service, dataSourceService *datasource.Service) *Handler {
+	return &Handler{service: service, dataSourceService: dataSourceService}
 }
 
 // IngestSingle handles single measurement ingestion.
@@ -42,8 +42,8 @@ func NewHandler(service *Service, productService *product.Service) *Handler {
 //	@Failure		500		{object}	ErrorResponse	"Internal error"
 //	@Router			/ingest [post]
 func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
-	prod := ProductFromContext(r.Context())
-	if prod == nil {
+	ds := DataSourceFromContext(r.Context())
+	if ds == nil {
 		respondJSON(w, http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
 			Message: "missing or invalid API key",
@@ -60,7 +60,7 @@ func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.service.IngestSingle(r.Context(), prod.ID, req)
+	response, err := h.service.IngestSingle(r.Context(), ds.ID, req)
 	if err != nil {
 		// Check for validation errors
 		if ve, ok := IsValidationError(err); ok {
@@ -107,8 +107,8 @@ func (h *Handler) IngestSingle(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	ErrorResponse	"Internal error"
 //	@Router			/ingest/batch [post]
 func (h *Handler) IngestBatch(w http.ResponseWriter, r *http.Request) {
-	prod := ProductFromContext(r.Context())
-	if prod == nil {
+	ds := DataSourceFromContext(r.Context())
+	if ds == nil {
 		respondJSON(w, http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
 			Message: "missing or invalid API key",
@@ -125,7 +125,7 @@ func (h *Handler) IngestBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.service.IngestBatch(r.Context(), prod.ID, req)
+	response, err := h.service.IngestBatch(r.Context(), ds.ID, req)
 	if err != nil {
 		// Check for validation errors
 		if ve, ok := IsValidationError(err); ok {
@@ -162,48 +162,48 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// validateProductOwnership validates that the product belongs to the user's organization.
-func (h *Handler) validateProductOwnership(r *http.Request) (*product.Product, error) {
+// validateDataSourceOwnership validates that the data source belongs to the user's organization.
+func (h *Handler) validateDataSourceOwnership(r *http.Request) (*datasource.DataSource, error) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil {
 		return nil, errors.New("unauthorized")
 	}
 
-	productIDStr := chi.URLParam(r, "productId")
-	productID, err := uuid.Parse(productIDStr)
+	dataSourceIDStr := chi.URLParam(r, "dataSourceId")
+	dataSourceID, err := uuid.Parse(dataSourceIDStr)
 	if err != nil {
-		return nil, errors.New("invalid product ID")
+		return nil, errors.New("invalid data source ID")
 	}
 
-	prod, err := h.productService.GetProduct(r.Context(), user.OrganizationID, productID)
+	ds, err := h.dataSourceService.GetDataSource(r.Context(), user.OrganizationID, dataSourceID)
 	if err != nil {
-		if errors.Is(err, product.ErrProductNotFound) {
-			return nil, errors.New("product not found")
+		if errors.Is(err, datasource.ErrDataSourceNotFound) {
+			return nil, errors.New("data source not found")
 		}
-		if errors.Is(err, product.ErrUnauthorized) {
+		if errors.Is(err, datasource.ErrUnauthorized) {
 			return nil, errors.New("unauthorized")
 		}
 		return nil, err
 	}
 
-	return prod, nil
+	return ds, nil
 }
 
-// ListMeasurementNames handles listing unique measurement names for a product.
+// ListMeasurementNames handles listing unique measurement names for a data source.
 //
 //	@Summary		List measurement names
-//	@Description	Get all unique measurement names for a product with their metadata keys
+//	@Description	Get all unique measurement names for a data source with their metadata keys
 //	@Tags			measurements
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			productId	path		string	true	"Product ID"
-//	@Success		200			{object}	ListMeasurementNamesResponse
-//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
-//	@Failure		404			{object}	ErrorResponse	"Product not found"
-//	@Failure		500			{object}	ErrorResponse	"Internal error"
-//	@Router			/products/{productId}/measurements [get]
+//	@Param			dataSourceId	path		string	true	"Data Source ID"
+//	@Success		200				{object}	ListMeasurementNamesResponse
+//	@Failure		401				{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404				{object}	ErrorResponse	"Data source not found"
+//	@Failure		500				{object}	ErrorResponse	"Internal error"
+//	@Router			/data-sources/{dataSourceId}/measurements [get]
 func (h *Handler) ListMeasurementNames(w http.ResponseWriter, r *http.Request) {
-	prod, err := h.validateProductOwnership(r)
+	ds, err := h.validateDataSourceOwnership(r)
 	if err != nil {
 		if err.Error() == "unauthorized" {
 			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
@@ -212,22 +212,22 @@ func (h *Handler) ListMeasurementNames(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+		if err.Error() == "data source not found" || err.Error() == "invalid data source ID" {
 			respondJSON(w, http.StatusNotFound, ErrorResponse{
 				Error:   "not_found",
-				Message: "product not found",
+				Message: "data source not found",
 			})
 			return
 		}
-		log.Printf("validate product ownership error: %v", err)
+		log.Printf("validate data source ownership error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
-			Message: "failed to validate product",
+			Message: "failed to validate data source",
 		})
 		return
 	}
 
-	measurements, err := h.service.GetMeasurementNames(r.Context(), prod.ID)
+	measurements, err := h.service.GetMeasurementNames(r.Context(), ds.ID)
 	if err != nil {
 		log.Printf("get measurement names error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
@@ -247,15 +247,15 @@ func (h *Handler) ListMeasurementNames(w http.ResponseWriter, r *http.Request) {
 //	@Tags			measurements
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			productId	path		string	true	"Product ID"
-//	@Param			name		path		string	true	"Measurement name"
-//	@Success		200			{object}	GetMetadataValuesResponse
-//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
-//	@Failure		404			{object}	ErrorResponse	"Product not found"
-//	@Failure		500			{object}	ErrorResponse	"Internal error"
-//	@Router			/products/{productId}/measurements/{name}/metadata [get]
+//	@Param			dataSourceId	path		string	true	"Data Source ID"
+//	@Param			name			path		string	true	"Measurement name"
+//	@Success		200				{object}	GetMetadataValuesResponse
+//	@Failure		401				{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404				{object}	ErrorResponse	"Data source not found"
+//	@Failure		500				{object}	ErrorResponse	"Internal error"
+//	@Router			/data-sources/{dataSourceId}/measurements/{name}/metadata [get]
 func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
-	prod, err := h.validateProductOwnership(r)
+	ds, err := h.validateDataSourceOwnership(r)
 	if err != nil {
 		if err.Error() == "unauthorized" {
 			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
@@ -264,17 +264,17 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+		if err.Error() == "data source not found" || err.Error() == "invalid data source ID" {
 			respondJSON(w, http.StatusNotFound, ErrorResponse{
 				Error:   "not_found",
-				Message: "product not found",
+				Message: "data source not found",
 			})
 			return
 		}
-		log.Printf("validate product ownership error: %v", err)
+		log.Printf("validate data source ownership error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
-			Message: "failed to validate product",
+			Message: "failed to validate data source",
 		})
 		return
 	}
@@ -288,7 +288,7 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metadata, err := h.service.GetMetadataValues(r.Context(), prod.ID, measurementName)
+	metadata, err := h.service.GetMetadataValues(r.Context(), ds.ID, measurementName)
 	if err != nil {
 		log.Printf("get metadata values error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
@@ -308,18 +308,18 @@ func (h *Handler) GetMetadataValues(w http.ResponseWriter, r *http.Request) {
 //	@Tags			measurements
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			productId	path		string	true	"Product ID"
-//	@Param			name		path		string	true	"Measurement name"
-//	@Param			start		query		string	true	"Start date (ISO 8601)"
-//	@Param			end			query		string	true	"End date (ISO 8601)"
-//	@Success		200			{object}	GetMeasurementDataResponse
-//	@Failure		400			{object}	ErrorResponse	"Validation error"
-//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
-//	@Failure		404			{object}	ErrorResponse	"Product not found"
-//	@Failure		500			{object}	ErrorResponse	"Internal error"
-//	@Router			/products/{productId}/measurements/{name}/data [get]
+//	@Param			dataSourceId	path		string	true	"Data Source ID"
+//	@Param			name			path		string	true	"Measurement name"
+//	@Param			start			query		string	true	"Start date (ISO 8601)"
+//	@Param			end				query		string	true	"End date (ISO 8601)"
+//	@Success		200				{object}	GetMeasurementDataResponse
+//	@Failure		400				{object}	ErrorResponse	"Validation error"
+//	@Failure		401				{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404				{object}	ErrorResponse	"Data source not found"
+//	@Failure		500				{object}	ErrorResponse	"Internal error"
+//	@Router			/data-sources/{dataSourceId}/measurements/{name}/data [get]
 func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
-	prod, err := h.validateProductOwnership(r)
+	ds, err := h.validateDataSourceOwnership(r)
 	if err != nil {
 		if err.Error() == "unauthorized" {
 			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
@@ -328,17 +328,17 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+		if err.Error() == "data source not found" || err.Error() == "invalid data source ID" {
 			respondJSON(w, http.StatusNotFound, ErrorResponse{
 				Error:   "not_found",
-				Message: "product not found",
+				Message: "data source not found",
 			})
 			return
 		}
-		log.Printf("validate product ownership error: %v", err)
+		log.Printf("validate data source ownership error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
-			Message: "failed to validate product",
+			Message: "failed to validate data source",
 		})
 		return
 	}
@@ -363,7 +363,7 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 
 	metadataFilters := h.parseMetadataFilters(r)
 
-	dataPoints, err := h.service.GetAggregatedMeasurements(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters)
+	dataPoints, err := h.service.GetAggregatedMeasurements(r.Context(), ds.ID, measurementName, startDate, endDate, metadataFilters)
 	if err != nil {
 		log.Printf("get measurement data error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
@@ -386,19 +386,19 @@ func (h *Handler) GetMeasurementData(w http.ResponseWriter, r *http.Request) {
 //	@Tags			measurements
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			productId	path		string	true	"Product ID"
-//	@Param			name		path		string	true	"Measurement name"
-//	@Param			start		query		string	true	"Start date (ISO 8601)"
-//	@Param			end			query		string	true	"End date (ISO 8601)"
-//	@Param			splitBy		query		string	true	"Metadata key to split data by"
-//	@Success		200			{object}	GetMeasurementDataSplitResponse
-//	@Failure		400			{object}	ErrorResponse	"Validation error"
-//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
-//	@Failure		404			{object}	ErrorResponse	"Product not found"
-//	@Failure		500			{object}	ErrorResponse	"Internal error"
-//	@Router			/products/{productId}/measurements/{name}/data/split [get]
+//	@Param			dataSourceId	path		string	true	"Data Source ID"
+//	@Param			name			path		string	true	"Measurement name"
+//	@Param			start			query		string	true	"Start date (ISO 8601)"
+//	@Param			end				query		string	true	"End date (ISO 8601)"
+//	@Param			splitBy			query		string	true	"Metadata key to split data by"
+//	@Success		200				{object}	GetMeasurementDataSplitResponse
+//	@Failure		400				{object}	ErrorResponse	"Validation error"
+//	@Failure		401				{object}	ErrorResponse	"Unauthorized"
+//	@Failure		404				{object}	ErrorResponse	"Data source not found"
+//	@Failure		500				{object}	ErrorResponse	"Internal error"
+//	@Router			/data-sources/{dataSourceId}/measurements/{name}/data/split [get]
 func (h *Handler) GetMeasurementDataSplit(w http.ResponseWriter, r *http.Request) {
-	prod, err := h.validateProductOwnership(r)
+	ds, err := h.validateDataSourceOwnership(r)
 	if err != nil {
 		if err.Error() == "unauthorized" {
 			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
@@ -407,17 +407,17 @@ func (h *Handler) GetMeasurementDataSplit(w http.ResponseWriter, r *http.Request
 			})
 			return
 		}
-		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
+		if err.Error() == "data source not found" || err.Error() == "invalid data source ID" {
 			respondJSON(w, http.StatusNotFound, ErrorResponse{
 				Error:   "not_found",
-				Message: "product not found",
+				Message: "data source not found",
 			})
 			return
 		}
-		log.Printf("validate product ownership error: %v", err)
+		log.Printf("validate data source ownership error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
-			Message: "failed to validate product",
+			Message: "failed to validate data source",
 		})
 		return
 	}
@@ -451,7 +451,7 @@ func (h *Handler) GetMeasurementDataSplit(w http.ResponseWriter, r *http.Request
 
 	metadataFilters := h.parseMetadataFilters(r)
 
-	series, err := h.service.GetAggregatedMeasurementsSplitBy(r.Context(), prod.ID, measurementName, startDate, endDate, metadataFilters, splitByKey)
+	series, err := h.service.GetAggregatedMeasurementsSplitBy(r.Context(), ds.ID, measurementName, startDate, endDate, metadataFilters, splitByKey)
 	if err != nil {
 		log.Printf("get measurement data split by error: %v", err)
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
@@ -509,145 +509,4 @@ func (h *Handler) parseMetadataFilters(r *http.Request) map[string]string {
 		}
 	}
 	return metadataFilters
-}
-
-// GetPreferences handles getting saved chart preferences for a measurement.
-//
-//	@Summary		Get measurement preferences
-//	@Description	Get saved chart preferences for a measurement
-//	@Tags			measurements
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			productId	path		string	true	"Product ID"
-//	@Param			name		path		string	true	"Measurement name"
-//	@Success		200			{object}	GetPreferencesResponse
-//	@Failure		401			{object}	ErrorResponse	"Unauthorized"
-//	@Failure		404			{object}	ErrorResponse	"Product not found"
-//	@Failure		500			{object}	ErrorResponse	"Internal error"
-//	@Router			/products/{productId}/measurements/{name}/preferences [get]
-func (h *Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
-	prod, err := h.validateProductOwnership(r)
-	if err != nil {
-		if err.Error() == "unauthorized" {
-			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
-				Error:   "unauthorized",
-				Message: "unauthorized",
-			})
-			return
-		}
-		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
-			respondJSON(w, http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: "product not found",
-			})
-			return
-		}
-		log.Printf("validate product ownership error: %v", err)
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: "failed to validate product",
-		})
-		return
-	}
-
-	measurementName := chi.URLParam(r, "name")
-	if measurementName == "" {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_failed",
-			Message: "measurement name is required",
-		})
-		return
-	}
-
-	prefs, err := h.service.GetPreferences(r.Context(), prod.ID, measurementName)
-	if err != nil {
-		log.Printf("get preferences error: %v", err)
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: "failed to get preferences",
-		})
-		return
-	}
-
-	respondJSON(w, http.StatusOK, GetPreferencesResponse{Preferences: prefs})
-}
-
-// SavePreferences handles saving chart preferences for a measurement.
-//
-//	@Summary		Save measurement preferences
-//	@Description	Save chart preferences for a measurement (creates or updates)
-//	@Tags			measurements
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			productId	path		string					true	"Product ID"
-//	@Param			name		path		string					true	"Measurement name"
-//	@Param			request		body		SavePreferencesRequest	true	"Preferences data"
-//	@Success		200			{object}	map[string]string		"success message"
-//	@Failure		400			{object}	ErrorResponse			"Validation error"
-//	@Failure		401			{object}	ErrorResponse			"Unauthorized"
-//	@Failure		404			{object}	ErrorResponse			"Product not found"
-//	@Failure		500			{object}	ErrorResponse			"Internal error"
-//	@Router			/products/{productId}/measurements/{name}/preferences [post]
-func (h *Handler) SavePreferences(w http.ResponseWriter, r *http.Request) {
-	prod, err := h.validateProductOwnership(r)
-	if err != nil {
-		if err.Error() == "unauthorized" {
-			respondJSON(w, http.StatusUnauthorized, ErrorResponse{
-				Error:   "unauthorized",
-				Message: "unauthorized",
-			})
-			return
-		}
-		if err.Error() == "product not found" || err.Error() == "invalid product ID" {
-			respondJSON(w, http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: "product not found",
-			})
-			return
-		}
-		log.Printf("validate product ownership error: %v", err)
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: "failed to validate product",
-		})
-		return
-	}
-
-	measurementName := chi.URLParam(r, "name")
-	if measurementName == "" {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_failed",
-			Message: "measurement name is required",
-		})
-		return
-	}
-
-	var req SavePreferencesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_failed",
-			Message: "invalid request body",
-		})
-		return
-	}
-
-	err = h.service.SavePreferences(r.Context(), prod.ID, measurementName, &req.Preferences)
-	if err != nil {
-		if ve, ok := IsValidationError(err); ok {
-			respondJSON(w, http.StatusBadRequest, ErrorResponse{
-				Error:   ve.errorType,
-				Message: ve.message,
-			})
-			return
-		}
-		log.Printf("save preferences error: %v", err)
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: "failed to save preferences",
-		})
-		return
-	}
-
-	respondJSON(w, http.StatusOK, map[string]string{"message": "preferences saved"})
 }

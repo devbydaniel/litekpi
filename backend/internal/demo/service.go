@@ -9,38 +9,38 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/devbydaniel/litekpi/internal/datasource"
 	"github.com/devbydaniel/litekpi/internal/ingest"
-	"github.com/devbydaniel/litekpi/internal/product"
 )
 
-// Service handles demo product creation business logic.
+// Service handles demo data source creation business logic.
 type Service struct {
-	productService *product.Service
-	ingestService  *ingest.Service
+	dataSourceService *datasource.Service
+	ingestService     *ingest.Service
 }
 
 // NewService creates a new demo service.
-func NewService(productService *product.Service, ingestService *ingest.Service) *Service {
+func NewService(dataSourceService *datasource.Service, ingestService *ingest.Service) *Service {
 	return &Service{
-		productService: productService,
-		ingestService:  ingestService,
+		dataSourceService: dataSourceService,
+		ingestService:     ingestService,
 	}
 }
 
-// CreateDemoProduct creates a demo product with sample measurements for the last 30 days.
-func (s *Service) CreateDemoProduct(ctx context.Context, orgID uuid.UUID) (*product.CreateProductResponse, error) {
-	// Create the demo product
-	response, err := s.productService.CreateProduct(ctx, orgID, product.CreateProductRequest{
-		Name: "Demo Product",
+// CreateDemoDataSource creates a demo data source with sample measurements for the last 30 days.
+func (s *Service) CreateDemoDataSource(ctx context.Context, orgID uuid.UUID) (*datasource.CreateDataSourceResponse, error) {
+	// Create the demo data source
+	response, err := s.dataSourceService.CreateDataSource(ctx, orgID, datasource.CreateDataSourceRequest{
+		Name: "Demo Data Source",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create demo product: %w", err)
+		return nil, fmt.Errorf("failed to create demo data source: %w", err)
 	}
 
 	// Generate demo measurements for last 30 days
-	if err := s.createDemoMeasurements(ctx, response.Product.ID); err != nil {
-		// Rollback: delete the product if measurements fail
-		s.productService.DeleteProduct(ctx, orgID, response.Product.ID)
+	if err := s.createDemoMeasurements(ctx, response.DataSource.ID); err != nil {
+		// Rollback: delete the data source if measurements fail
+		s.dataSourceService.DeleteDataSource(ctx, orgID, response.DataSource.ID)
 		return nil, fmt.Errorf("failed to create demo measurements: %w", err)
 	}
 
@@ -48,7 +48,7 @@ func (s *Service) CreateDemoProduct(ctx context.Context, orgID uuid.UUID) (*prod
 }
 
 // createDemoMeasurements generates realistic demo data for the last 30 days.
-func (s *Service) createDemoMeasurements(ctx context.Context, productID uuid.UUID) error {
+func (s *Service) createDemoMeasurements(ctx context.Context, dataSourceID uuid.UUID) error {
 	now := time.Now().UTC()
 	var metrics []ingest.IngestRequest
 
@@ -111,7 +111,7 @@ func (s *Service) createDemoMeasurements(ctx context.Context, productID uuid.UUI
 			end = len(metrics)
 		}
 		batch := ingest.BatchIngestRequest{Metrics: metrics[i:end]}
-		if _, err := s.ingestService.IngestBatch(ctx, productID, batch); err != nil {
+		if _, err := s.ingestService.IngestBatch(ctx, dataSourceID, batch); err != nil {
 			return err
 		}
 	}

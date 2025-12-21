@@ -647,3 +647,274 @@ func generateSecureToken() (string, error) {
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return AuthMiddleware(s.jwt, s.repo)(next)
 }
+
+// Invite expiry duration
+const inviteExpiry = 7 * 24 * time.Hour
+
+var (
+	ErrInviteNotFound     = errors.New("invite not found")
+	ErrInviteExpired      = errors.New("invite has expired")
+	ErrInviteAlreadyUsed  = errors.New("invite has already been used")
+	ErrLastAdmin          = errors.New("cannot remove or demote the last admin")
+	ErrCannotRemoveSelf   = errors.New("cannot remove yourself")
+	ErrUserAlreadyExists  = errors.New("user with this email already exists")
+	ErrPendingInviteExists = errors.New("a pending invite already exists for this email")
+)
+
+// IsEmailEnabled returns whether email is configured.
+func (s *Service) IsEmailEnabled() bool {
+	return s.email.IsEnabled()
+}
+
+// CreateInvite creates a new invite.
+func (s *Service) CreateInvite(ctx context.Context, req CreateInviteRequest, inviter *User) (*CreateInviteResponse, error) {
+	email := strings.ToLower(req.Email)
+
+	// Check if user already exists
+	existingUser, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing user: %w", err)
+	}
+	if existingUser != nil {
+		return nil, ErrUserAlreadyExists
+	}
+
+	// Check if there's already a pending invite
+	existingInvite, err := s.repo.GetPendingInviteByEmail(ctx, inviter.OrganizationID, email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing invite: %w", err)
+	}
+	if existingInvite != nil {
+		return nil, ErrPendingInviteExists
+	}
+
+	// Generate token
+	token, err := generateSecureToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	// Create invite
+	expiresAt := time.Now().Add(inviteExpiry)
+	invite, err := s.repo.CreateInvite(ctx, inviter.OrganizationID, email, req.Role, token, inviter.ID, expiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create invite: %w", err)
+	}
+
+	// Try to send email
+	if s.email.IsEnabled() {
+		org, err := s.repo.GetOrganizationByID(ctx, inviter.OrganizationID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get organization: %w", err)
+		}
+		if err := s.email.SendInviteEmail(email, token, inviter.Name, org.Name); err != nil {
+			// Log but don't fail if email fails
+			fmt.Printf("failed to send invite email: %v\n", err)
+		}
+		return &CreateInviteResponse{Invite: *invite}, nil
+	}
+
+	// Email not configured - return invite URL
+	inviteURL := fmt.Sprintf("%s/accept-invite?token=%s", s.appURL, token)
+	return &CreateInviteResponse{Invite: *invite, InviteURL: &inviteURL}, nil
+}
+
+// ListInvites lists pending invites for an organization.
+func (s *Service) ListInvites(ctx context.Context, orgID uuid.UUID) ([]InviteWithInviter, error) {
+	invites, err := s.repo.ListPendingInvites(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list invites: %w", err)
+	}
+	if invites == nil {
+		return []InviteWithInviter{}, nil
+	}
+	return invites, nil
+}
+
+// CancelInvite cancels a pending invite.
+func (s *Service) CancelInvite(ctx context.Context, inviteID uuid.UUID, orgID uuid.UUID) error {
+	invite, err := s.repo.GetInviteByID(ctx, inviteID)
+	if err != nil {
+		return fmt.Errorf("failed to get invite: %w", err)
+	}
+	if invite == nil {
+		return ErrInviteNotFound
+	}
+	if invite.OrganizationID != orgID {
+		return ErrInviteNotFound
+	}
+	if invite.AcceptedAt != nil {
+		return ErrInviteAlreadyUsed
+	}
+
+	if err := s.repo.DeleteInvite(ctx, inviteID); err != nil {
+		return fmt.Errorf("failed to delete invite: %w", err)
+	}
+	return nil
+}
+
+// ValidateInvite validates an invite token and returns info.
+func (s *Service) ValidateInvite(ctx context.Context, token string) (*ValidateInviteResponse, error) {
+	invite, err := s.repo.GetInviteByToken(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get invite: %w", err)
+	}
+	if invite == nil {
+		return &ValidateInviteResponse{Valid: false}, nil
+	}
+	if invite.AcceptedAt != nil {
+		return &ValidateInviteResponse{Valid: false}, nil
+	}
+	if time.Now().After(invite.ExpiresAt) {
+		return &ValidateInviteResponse{Valid: false}, nil
+	}
+
+	// Get organization and inviter info
+	org, err := s.repo.GetOrganizationByID(ctx, invite.OrganizationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get organization: %w", err)
+	}
+	inviter, err := s.repo.GetUserByID(ctx, invite.InvitedBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inviter: %w", err)
+	}
+
+	return &ValidateInviteResponse{
+		Valid:            true,
+		Email:            invite.Email,
+		OrganizationName: org.Name,
+		Role:             invite.Role,
+		InviterName:      inviter.Name,
+	}, nil
+}
+
+// AcceptInvite accepts an invite and creates the user.
+func (s *Service) AcceptInvite(ctx context.Context, req AcceptInviteRequest) (*User, error) {
+	invite, err := s.repo.GetInviteByToken(ctx, req.Token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get invite: %w", err)
+	}
+	if invite == nil {
+		return nil, ErrInviteNotFound
+	}
+	if invite.AcceptedAt != nil {
+		return nil, ErrInviteAlreadyUsed
+	}
+	if time.Now().After(invite.ExpiresAt) {
+		return nil, ErrInviteExpired
+	}
+
+	// Check if email already exists (in case someone registered in the meantime)
+	existingUser, err := s.repo.GetUserByEmail(ctx, invite.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing user: %w", err)
+	}
+	if existingUser != nil {
+		return nil, ErrEmailAlreadyExists
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+	hash := string(hashedPassword)
+
+	// Create user
+	user, err := s.repo.CreateUser(ctx, invite.Email, req.Name, &hash, invite.OrganizationID, invite.Role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Mark email as verified (trusted from invite)
+	if err := s.repo.UpdateUserEmailVerified(ctx, user.ID, true); err != nil {
+		return nil, fmt.Errorf("failed to verify email: %w", err)
+	}
+	user.EmailVerified = true
+
+	// Mark invite as accepted
+	if err := s.repo.MarkInviteAccepted(ctx, invite.ID); err != nil {
+		return nil, fmt.Errorf("failed to mark invite accepted: %w", err)
+	}
+
+	return user, nil
+}
+
+// ListUsers lists users in an organization.
+func (s *Service) ListUsers(ctx context.Context, orgID uuid.UUID) ([]User, error) {
+	users, err := s.repo.ListUsersByOrg(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	if users == nil {
+		return []User{}, nil
+	}
+	return users, nil
+}
+
+// UpdateUserRole updates a user's role.
+func (s *Service) UpdateUserRole(ctx context.Context, userID uuid.UUID, role Role, requestingUser *User) error {
+	// Get target user
+	targetUser, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+	if targetUser == nil {
+		return ErrUserNotFound
+	}
+	if targetUser.OrganizationID != requestingUser.OrganizationID {
+		return ErrUserNotFound
+	}
+
+	// If demoting an admin, check if it's the last one
+	if targetUser.Role == RoleAdmin && role != RoleAdmin {
+		count, err := s.repo.CountAdmins(ctx, requestingUser.OrganizationID)
+		if err != nil {
+			return fmt.Errorf("failed to count admins: %w", err)
+		}
+		if count <= 1 {
+			return ErrLastAdmin
+		}
+	}
+
+	if err := s.repo.UpdateUserRole(ctx, userID, role); err != nil {
+		return fmt.Errorf("failed to update user role: %w", err)
+	}
+	return nil
+}
+
+// RemoveUser removes a user from the organization.
+func (s *Service) RemoveUser(ctx context.Context, userID uuid.UUID, requestingUser *User) error {
+	// Cannot remove self
+	if userID == requestingUser.ID {
+		return ErrCannotRemoveSelf
+	}
+
+	// Get target user
+	targetUser, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+	if targetUser == nil {
+		return ErrUserNotFound
+	}
+	if targetUser.OrganizationID != requestingUser.OrganizationID {
+		return ErrUserNotFound
+	}
+
+	// If removing an admin, check if it's the last one
+	if targetUser.Role == RoleAdmin {
+		count, err := s.repo.CountAdmins(ctx, requestingUser.OrganizationID)
+		if err != nil {
+			return fmt.Errorf("failed to count admins: %w", err)
+		}
+		if count <= 1 {
+			return ErrLastAdmin
+		}
+	}
+
+	if err := s.repo.DeleteUser(ctx, userID); err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+	return nil
+}

@@ -391,3 +391,199 @@ func (r *Repository) DeletePasswordResetTokensByUserID(ctx context.Context, user
 	)
 	return err
 }
+
+// CreateInvite creates a new invite.
+func (r *Repository) CreateInvite(ctx context.Context, orgID uuid.UUID, email string, role Role, token string, invitedBy uuid.UUID, expiresAt time.Time) (*Invite, error) {
+	invite := &Invite{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Email:          email,
+		Role:           role,
+		Token:          token,
+		InvitedBy:      invitedBy,
+		ExpiresAt:      expiresAt,
+		CreatedAt:      time.Now(),
+	}
+
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO invites (id, organization_id, email, role, token, invited_by, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		invite.ID, invite.OrganizationID, invite.Email, invite.Role, invite.Token, invite.InvitedBy, invite.ExpiresAt, invite.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return invite, nil
+}
+
+// GetInviteByToken retrieves an invite by its token.
+func (r *Repository) GetInviteByToken(ctx context.Context, token string) (*Invite, error) {
+	invite := &Invite{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, organization_id, email, role, token, invited_by, expires_at, accepted_at, created_at
+		FROM invites WHERE token = $1`,
+		token,
+	).Scan(&invite.ID, &invite.OrganizationID, &invite.Email, &invite.Role, &invite.Token, &invite.InvitedBy, &invite.ExpiresAt, &invite.AcceptedAt, &invite.CreatedAt)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return invite, nil
+}
+
+// GetInviteByID retrieves an invite by its ID.
+func (r *Repository) GetInviteByID(ctx context.Context, id uuid.UUID) (*Invite, error) {
+	invite := &Invite{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, organization_id, email, role, token, invited_by, expires_at, accepted_at, created_at
+		FROM invites WHERE id = $1`,
+		id,
+	).Scan(&invite.ID, &invite.OrganizationID, &invite.Email, &invite.Role, &invite.Token, &invite.InvitedBy, &invite.ExpiresAt, &invite.AcceptedAt, &invite.CreatedAt)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return invite, nil
+}
+
+// GetPendingInviteByEmail retrieves a pending invite by email within an organization.
+func (r *Repository) GetPendingInviteByEmail(ctx context.Context, orgID uuid.UUID, email string) (*Invite, error) {
+	invite := &Invite{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, organization_id, email, role, token, invited_by, expires_at, accepted_at, created_at
+		FROM invites WHERE organization_id = $1 AND email = $2 AND accepted_at IS NULL`,
+		orgID, email,
+	).Scan(&invite.ID, &invite.OrganizationID, &invite.Email, &invite.Role, &invite.Token, &invite.InvitedBy, &invite.ExpiresAt, &invite.AcceptedAt, &invite.CreatedAt)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return invite, nil
+}
+
+// ListPendingInvites retrieves all pending invites for an organization with inviter info.
+func (r *Repository) ListPendingInvites(ctx context.Context, orgID uuid.UUID) ([]InviteWithInviter, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at, i.accepted_at, i.created_at,
+		        u.name, u.email
+		FROM invites i
+		JOIN users u ON i.invited_by = u.id
+		WHERE i.organization_id = $1 AND i.accepted_at IS NULL AND i.expires_at > NOW()
+		ORDER BY i.created_at DESC`,
+		orgID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var invites []InviteWithInviter
+	for rows.Next() {
+		var invite InviteWithInviter
+		if err := rows.Scan(
+			&invite.ID, &invite.OrganizationID, &invite.Email, &invite.Role, &invite.InvitedBy,
+			&invite.ExpiresAt, &invite.AcceptedAt, &invite.CreatedAt,
+			&invite.InviterName, &invite.InviterEmail,
+		); err != nil {
+			return nil, err
+		}
+		invites = append(invites, invite)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return invites, nil
+}
+
+// MarkInviteAccepted marks an invite as accepted.
+func (r *Repository) MarkInviteAccepted(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE invites SET accepted_at = NOW() WHERE id = $1`,
+		id,
+	)
+	return err
+}
+
+// DeleteInvite deletes an invite.
+func (r *Repository) DeleteInvite(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM invites WHERE id = $1`,
+		id,
+	)
+	return err
+}
+
+// ListUsersByOrg retrieves all users for an organization.
+func (r *Repository) ListUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]User, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, email, name, password_hash, email_verified, organization_id, role, created_at, updated_at
+		FROM users WHERE organization_id = $1
+		ORDER BY created_at ASC`,
+		orgID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(
+			&user.ID, &user.Email, &user.Name, &user.PasswordHash, &user.EmailVerified,
+			&user.OrganizationID, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// UpdateUserRole updates a user's role.
+func (r *Repository) UpdateUserRole(ctx context.Context, id uuid.UUID, role Role) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`,
+		role, id,
+	)
+	return err
+}
+
+// DeleteUser deletes a user by ID.
+func (r *Repository) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM users WHERE id = $1`,
+		id,
+	)
+	return err
+}
+
+// CountAdmins counts the number of admins in an organization.
+func (r *Repository) CountAdmins(ctx context.Context, orgID uuid.UUID) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM users WHERE organization_id = $1 AND role = 'admin'`,
+		orgID,
+	).Scan(&count)
+	return count, err
+}

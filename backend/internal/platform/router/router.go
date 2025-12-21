@@ -9,12 +9,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
+
 	"github.com/devbydaniel/litekpi/internal/auth"
+	"github.com/devbydaniel/litekpi/internal/dashboard"
+	"github.com/devbydaniel/litekpi/internal/datasource"
 	"github.com/devbydaniel/litekpi/internal/demo"
 	"github.com/devbydaniel/litekpi/internal/ingest"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
-	"github.com/devbydaniel/litekpi/internal/product"
 
 	_ "github.com/devbydaniel/litekpi/docs" // Swagger docs
 )
@@ -54,18 +56,23 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	authService := auth.NewService(authRepo, jwtService, emailService, cfg)
 	authHandler := auth.NewHandler(authService)
 
-	// Initialize product module
-	productRepo := product.NewRepository(db.Pool)
-	productService := product.NewService(productRepo)
-	productHandler := product.NewHandler(productService)
+	// Initialize data source module
+	dsRepo := datasource.NewRepository(db.Pool)
+	dsService := datasource.NewService(dsRepo)
+	dsHandler := datasource.NewHandler(dsService)
+
+	// Initialize dashboard module
+	dashboardRepo := dashboard.NewRepository(db.Pool)
+	dashboardService := dashboard.NewService(dashboardRepo, dsService)
+	dashboardHandler := dashboard.NewHandler(dashboardService)
 
 	// Initialize ingest module
 	ingestRepo := ingest.NewRepository(db.Pool)
 	ingestService := ingest.NewService(ingestRepo)
-	ingestHandler := ingest.NewHandler(ingestService, productService)
+	ingestHandler := ingest.NewHandler(ingestService, dsService)
 
-	// Initialize demo module (uses both product and ingest services)
-	demoService := demo.NewService(productService, ingestService)
+	// Initialize demo module (uses both data source and ingest services)
+	demoService := demo.NewService(dsService, ingestService)
 	demoHandler := demo.NewHandler(demoService)
 
 	// Health check endpoint
@@ -89,14 +96,17 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 		// Register auth routes
 		authHandler.RegisterRoutes(r, authService.Middleware)
 
-		// Register product routes
-		productHandler.RegisterRoutes(r, authService.Middleware)
+		// Register data source routes
+		dsHandler.RegisterRoutes(r, authService.Middleware)
 
-		// Register demo routes (must be before ingest to handle /products/demo)
+		// Register dashboard routes
+		dashboardHandler.RegisterRoutes(r, authService.Middleware)
+
+		// Register demo routes
 		demoHandler.RegisterRoutes(r, authService.Middleware)
 
 		// Register ingest routes (uses API key auth, not JWT)
-		ingestHandler.RegisterRoutes(r, productRepo)
+		ingestHandler.RegisterRoutes(r, dsRepo)
 
 		// Register measurement query routes (uses JWT auth)
 		ingestHandler.RegisterMeasurementRoutes(r, authService.Middleware)

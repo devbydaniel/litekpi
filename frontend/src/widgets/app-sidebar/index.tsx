@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { LayoutDashboard, LogOut, Package } from 'lucide-react'
+import { Database, LayoutDashboard, LogOut, Users } from 'lucide-react'
 import { useAuthStore } from '@/shared/stores/auth-store'
 import { postAuthLogout } from '@/shared/api/generated/api'
 import {
@@ -68,13 +68,23 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Products">
-                  <Link to="/products">
-                    <Package className="size-4" />
-                    <span>Products</span>
+                <SidebarMenuButton asChild tooltip="Data Sources">
+                  <Link to="/data-sources">
+                    <Database className="size-4" />
+                    <span>Data Sources</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {user?.role === 'admin' && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Users">
+                    <Link to="/users">
+                      <Users className="size-4" />
+                      <span>Users</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

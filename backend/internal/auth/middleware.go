@@ -59,3 +59,27 @@ func UserFromContext(ctx context.Context) *User {
 	user, _ := ctx.Value(UserContextKey).(*User)
 	return user
 }
+
+// AdminMiddleware creates a middleware that requires admin role.
+func AdminMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := UserFromContext(r.Context())
+		if user == nil || user.Role != RoleAdmin {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// EditorMiddleware creates a middleware that requires editor or admin role.
+func EditorMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := UserFromContext(r.Context())
+		if user == nil || user.Role == RoleViewer {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

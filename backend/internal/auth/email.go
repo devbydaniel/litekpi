@@ -96,6 +96,31 @@ The LiteKPI Team`, resetURL)
 	return e.sendEmail(to, subject, body)
 }
 
+// SendInviteEmail sends an invitation email.
+func (e *EmailService) SendInviteEmail(to, token, inviterName, orgName string) error {
+	if !e.enabled {
+		return nil // Silently skip if email not configured
+	}
+
+	subject := fmt.Sprintf("You've been invited to join %s on LiteKPI", orgName)
+	inviteURL := fmt.Sprintf("%s/accept-invite?token=%s", e.appURL, token)
+
+	body := fmt.Sprintf(`Hi,
+
+%s has invited you to join %s on LiteKPI.
+
+Click the link below to accept the invitation and create your account:
+
+%s
+
+This invitation will expire in 7 days.
+
+Thanks,
+The LiteKPI Team`, inviterName, orgName, inviteURL)
+
+	return e.sendEmail(to, subject, body)
+}
+
 func (e *EmailService) sendEmail(to, subject, body string) error {
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
 		e.from, to, subject, body)

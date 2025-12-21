@@ -8,7 +8,7 @@ import { AppSidebar } from '@/widgets/app-sidebar'
 
 interface AuthenticatedLayoutProps {
   children: React.ReactNode
-  title?: string
+  title?: React.ReactNode
   actions?: React.ReactNode
 }
 
