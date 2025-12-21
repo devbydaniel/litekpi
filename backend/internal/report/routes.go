@@ -1,4 +1,4 @@
-package dashboard
+package report
 
 import (
 	"net/http"
@@ -8,31 +8,24 @@ import (
 	"github.com/devbydaniel/litekpi/internal/auth"
 )
 
-// RegisterRoutes registers all dashboard routes.
+// RegisterRoutes registers all report routes.
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(next http.Handler) http.Handler) {
-	r.Route("/dashboards", func(r chi.Router) {
+	r.Route("/reports", func(r chi.Router) {
 		r.Use(authMiddleware)
 
 		// Read operations (all authenticated users)
-		r.Get("/", h.ListDashboards)
-		r.Get("/default", h.GetDefaultDashboard)
-		r.Get("/{id}", h.GetDashboard)
+		r.Get("/", h.ListReports)
+		r.Get("/{id}", h.GetReport)
+		r.Get("/{id}/compute", h.ComputeReport)
 		r.Get("/{id}/kpis", h.ListKPIs)
-		r.Get("/{id}/kpis/compute", h.ComputeKPIs)
 
 		// Write operations (editor and admin only)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.EditorMiddleware)
 
-			r.Post("/", h.CreateDashboard)
-			r.Put("/{id}", h.UpdateDashboard)
-			r.Delete("/{id}", h.DeleteDashboard)
-
-			// Widget routes
-			r.Post("/{id}/widgets", h.CreateWidget)
-			r.Put("/{id}/widgets/{widgetId}", h.UpdateWidget)
-			r.Delete("/{id}/widgets/{widgetId}", h.DeleteWidget)
-			r.Put("/{id}/widgets/reorder", h.ReorderWidgets)
+			r.Post("/", h.CreateReport)
+			r.Put("/{id}", h.UpdateReport)
+			r.Delete("/{id}", h.DeleteReport)
 
 			// KPI routes
 			r.Post("/{id}/kpis", h.CreateKPI)

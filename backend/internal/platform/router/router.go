@@ -15,8 +15,10 @@ import (
 	"github.com/devbydaniel/litekpi/internal/datasource"
 	"github.com/devbydaniel/litekpi/internal/demo"
 	"github.com/devbydaniel/litekpi/internal/ingest"
+	"github.com/devbydaniel/litekpi/internal/kpi"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
+	"github.com/devbydaniel/litekpi/internal/report"
 
 	_ "github.com/devbydaniel/litekpi/docs" // Swagger docs
 )
@@ -61,17 +63,26 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	dsService := datasource.NewService(dsRepo)
 	dsHandler := datasource.NewHandler(dsService)
 
-	// Initialize dashboard module
-	dashboardRepo := dashboard.NewRepository(db.Pool)
-	dashboardService := dashboard.NewService(dashboardRepo, dsService)
-	dashboardHandler := dashboard.NewHandler(dashboardService)
-
 	// Initialize ingest module
 	ingestRepo := ingest.NewRepository(db.Pool)
 	ingestService := ingest.NewService(ingestRepo)
 	ingestHandler := ingest.NewHandler(ingestService, dsService)
 
-	// Initialize demo module (uses both data source and ingest services)
+	// Initialize KPI module
+	kpiRepo := kpi.NewRepository(db.Pool)
+	kpiService := kpi.NewService(kpiRepo, ingestService, dsService)
+
+	// Initialize dashboard module
+	dashboardRepo := dashboard.NewRepository(db.Pool)
+	dashboardService := dashboard.NewService(dashboardRepo, dsService)
+	dashboardHandler := dashboard.NewHandler(dashboardService, kpiService)
+
+	// Initialize report module
+	reportRepo := report.NewRepository(db.Pool)
+	reportService := report.NewService(reportRepo, kpiService)
+	reportHandler := report.NewHandler(reportService)
+
+	// Initialize demo module
 	demoService := demo.NewService(dsService, ingestService)
 	demoHandler := demo.NewHandler(demoService)
 
@@ -101,6 +112,9 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 		// Register dashboard routes
 		dashboardHandler.RegisterRoutes(r, authService.Middleware)
+
+		// Register report routes
+		reportHandler.RegisterRoutes(r, authService.Middleware)
 
 		// Register demo routes
 		demoHandler.RegisterRoutes(r, authService.Middleware)
@@ -138,7 +152,7 @@ func healthHandler(db *database.DB) http.HandlerFunc {
 }
 
 // respondJSON writes a JSON response.
-func respondJSON(w http.ResponseWriter, status int, data interface{}) {
+func respondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {

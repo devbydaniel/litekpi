@@ -10,16 +10,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/devbydaniel/litekpi/internal/auth"
+	"github.com/devbydaniel/litekpi/internal/kpi"
 )
 
 // Handler handles HTTP requests for dashboards.
 type Handler struct {
-	service *Service
+	service    *Service
+	kpiService *kpi.Service
 }
 
 // NewHandler creates a new dashboard handler.
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, kpiService *kpi.Service) *Handler {
+	return &Handler{
+		service:    service,
+		kpiService: kpiService,
+	}
 }
 
 // ListDashboards handles listing all dashboards for the organization.
@@ -518,6 +523,448 @@ func (h *Handler) ReorderWidgets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, MessageResponse{Message: "widgets reordered"})
+}
+
+// KPI handlers
+
+// ListKPIs handles listing all KPIs for a dashboard.
+//
+//	@Summary		List dashboard KPIs
+//	@Description	Get all KPIs for a dashboard
+//	@Tags			kpis
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Dashboard ID"
+//	@Success		200	{object}	kpi.ListKPIsResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		403	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Router			/dashboards/{id}/kpis [get]
+func (h *Handler) ListKPIs(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dashboardID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid dashboard ID")
+		return
+	}
+
+	// Verify dashboard ownership
+	_, err = h.service.GetDashboard(r.Context(), user.OrganizationID, dashboardID)
+	if err != nil {
+		if errors.Is(err, ErrDashboardNotFound) {
+			respondError(w, http.StatusNotFound, "dashboard not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get dashboard error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get dashboard")
+		return
+	}
+
+	kpis, err := h.kpiService.GetKPIsByDashboardID(r.Context(), dashboardID)
+	if err != nil {
+		log.Printf("list KPIs error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to list KPIs")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, kpi.ListKPIsResponse{KPIs: kpis})
+}
+
+// CreateKPI handles creating a new KPI on a dashboard.
+//
+//	@Summary		Create dashboard KPI
+//	@Description	Create a new KPI on a dashboard. Requires editor or admin role.
+//	@Tags			kpis
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Dashboard ID"
+//	@Param			request	body		kpi.CreateKPIRequest	true	"KPI data"
+//	@Success		201		{object}	kpi.KPI
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/dashboards/{id}/kpis [post]
+func (h *Handler) CreateKPI(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dashboardID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid dashboard ID")
+		return
+	}
+
+	// Verify dashboard ownership
+	_, err = h.service.GetDashboard(r.Context(), user.OrganizationID, dashboardID)
+	if err != nil {
+		if errors.Is(err, ErrDashboardNotFound) {
+			respondError(w, http.StatusNotFound, "dashboard not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get dashboard error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get dashboard")
+		return
+	}
+
+	var req kpi.CreateKPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	newKPI, err := h.kpiService.CreateKPIForDashboard(r.Context(), user.OrganizationID, dashboardID, req)
+	if err != nil {
+		if errors.Is(err, kpi.ErrLabelEmpty) {
+			respondError(w, http.StatusBadRequest, "label is required")
+			return
+		}
+		if errors.Is(err, kpi.ErrLabelTooLong) {
+			respondError(w, http.StatusBadRequest, "label exceeds maximum length")
+			return
+		}
+		if errors.Is(err, kpi.ErrMeasurementNameEmpty) {
+			respondError(w, http.StatusBadRequest, "measurement name is required")
+			return
+		}
+		if errors.Is(err, kpi.ErrInvalidTimeframe) {
+			respondError(w, http.StatusBadRequest, "invalid timeframe")
+			return
+		}
+		if errors.Is(err, kpi.ErrInvalidAggregation) {
+			respondError(w, http.StatusBadRequest, "invalid aggregation type")
+			return
+		}
+		if errors.Is(err, kpi.ErrInvalidComparisonType) {
+			respondError(w, http.StatusBadRequest, "invalid comparison display type")
+			return
+		}
+		log.Printf("create KPI error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to create KPI")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, newKPI)
+}
+
+// UpdateKPI handles updating a KPI.
+//
+//	@Summary		Update dashboard KPI
+//	@Description	Update a KPI's configuration. Requires editor or admin role.
+//	@Tags			kpis
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Dashboard ID"
+//	@Param			kpiId	path		string				true	"KPI ID"
+//	@Param			request	body		kpi.UpdateKPIRequest	true	"KPI data"
+//	@Success		200		{object}	kpi.KPI
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/dashboards/{id}/kpis/{kpiId} [put]
+func (h *Handler) UpdateKPI(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dashboardID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid dashboard ID")
+		return
+	}
+
+	kpiID, err := uuid.Parse(chi.URLParam(r, "kpiId"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid KPI ID")
+		return
+	}
+
+	// Verify dashboard ownership
+	_, err = h.service.GetDashboard(r.Context(), user.OrganizationID, dashboardID)
+	if err != nil {
+		if errors.Is(err, ErrDashboardNotFound) {
+			respondError(w, http.StatusNotFound, "dashboard not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get dashboard error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get dashboard")
+		return
+	}
+
+	// Verify KPI belongs to this dashboard
+	existingKPI, err := h.kpiService.GetKPIByID(r.Context(), kpiID)
+	if err != nil {
+		if errors.Is(err, kpi.ErrKPINotFound) {
+			respondError(w, http.StatusNotFound, "KPI not found")
+			return
+		}
+		log.Printf("get KPI error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get KPI")
+		return
+	}
+	if existingKPI.DashboardID == nil || *existingKPI.DashboardID != dashboardID {
+		respondError(w, http.StatusNotFound, "KPI not found")
+		return
+	}
+
+	var req kpi.UpdateKPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	updatedKPI, err := h.kpiService.UpdateKPI(r.Context(), kpiID, req)
+	if err != nil {
+		if errors.Is(err, kpi.ErrLabelEmpty) {
+			respondError(w, http.StatusBadRequest, "label is required")
+			return
+		}
+		if errors.Is(err, kpi.ErrLabelTooLong) {
+			respondError(w, http.StatusBadRequest, "label exceeds maximum length")
+			return
+		}
+		if errors.Is(err, kpi.ErrInvalidTimeframe) {
+			respondError(w, http.StatusBadRequest, "invalid timeframe")
+			return
+		}
+		if errors.Is(err, kpi.ErrInvalidAggregation) {
+			respondError(w, http.StatusBadRequest, "invalid aggregation type")
+			return
+		}
+		if errors.Is(err, kpi.ErrInvalidComparisonType) {
+			respondError(w, http.StatusBadRequest, "invalid comparison display type")
+			return
+		}
+		log.Printf("update KPI error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to update KPI")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, updatedKPI)
+}
+
+// DeleteKPI handles deleting a KPI.
+//
+//	@Summary		Delete dashboard KPI
+//	@Description	Delete a KPI from a dashboard. Requires editor or admin role.
+//	@Tags			kpis
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string	true	"Dashboard ID"
+//	@Param			kpiId	path		string	true	"KPI ID"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/dashboards/{id}/kpis/{kpiId} [delete]
+func (h *Handler) DeleteKPI(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dashboardID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid dashboard ID")
+		return
+	}
+
+	kpiID, err := uuid.Parse(chi.URLParam(r, "kpiId"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid KPI ID")
+		return
+	}
+
+	// Verify dashboard ownership
+	_, err = h.service.GetDashboard(r.Context(), user.OrganizationID, dashboardID)
+	if err != nil {
+		if errors.Is(err, ErrDashboardNotFound) {
+			respondError(w, http.StatusNotFound, "dashboard not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get dashboard error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get dashboard")
+		return
+	}
+
+	// Verify KPI belongs to this dashboard
+	existingKPI, err := h.kpiService.GetKPIByID(r.Context(), kpiID)
+	if err != nil {
+		if errors.Is(err, kpi.ErrKPINotFound) {
+			respondError(w, http.StatusNotFound, "KPI not found")
+			return
+		}
+		log.Printf("get KPI error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get KPI")
+		return
+	}
+	if existingKPI.DashboardID == nil || *existingKPI.DashboardID != dashboardID {
+		respondError(w, http.StatusNotFound, "KPI not found")
+		return
+	}
+
+	if err := h.kpiService.DeleteKPI(r.Context(), kpiID); err != nil {
+		log.Printf("delete KPI error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to delete KPI")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, MessageResponse{Message: "KPI deleted"})
+}
+
+// ComputeKPIs handles computing KPI values for a dashboard.
+//
+//	@Summary		Compute dashboard KPIs
+//	@Description	Get computed values for all KPIs on a dashboard
+//	@Tags			kpis
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Dashboard ID"
+//	@Success		200	{object}	kpi.ComputeKPIsResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		403	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Router			/dashboards/{id}/kpis/compute [get]
+func (h *Handler) ComputeKPIs(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dashboardID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid dashboard ID")
+		return
+	}
+
+	// Verify dashboard ownership
+	_, err = h.service.GetDashboard(r.Context(), user.OrganizationID, dashboardID)
+	if err != nil {
+		if errors.Is(err, ErrDashboardNotFound) {
+			respondError(w, http.StatusNotFound, "dashboard not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get dashboard error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get dashboard")
+		return
+	}
+
+	kpis, err := h.kpiService.GetKPIsByDashboardID(r.Context(), dashboardID)
+	if err != nil {
+		log.Printf("list KPIs error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to list KPIs")
+		return
+	}
+
+	computedKPIs, err := h.kpiService.ComputeKPIs(r.Context(), kpis)
+	if err != nil {
+		log.Printf("compute KPIs error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to compute KPIs")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, kpi.ComputeKPIsResponse{KPIs: computedKPIs})
+}
+
+// ReorderKPIs handles reordering KPIs on a dashboard.
+//
+//	@Summary		Reorder dashboard KPIs
+//	@Description	Reorder KPIs on a dashboard. Requires editor or admin role.
+//	@Tags			kpis
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Dashboard ID"
+//	@Param			request	body		kpi.ReorderKPIsRequest	true	"KPI order"
+//	@Success		200		{object}	MessageResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/dashboards/{id}/kpis/reorder [put]
+func (h *Handler) ReorderKPIs(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dashboardID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid dashboard ID")
+		return
+	}
+
+	// Verify dashboard ownership
+	_, err = h.service.GetDashboard(r.Context(), user.OrganizationID, dashboardID)
+	if err != nil {
+		if errors.Is(err, ErrDashboardNotFound) {
+			respondError(w, http.StatusNotFound, "dashboard not found")
+			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			respondError(w, http.StatusForbidden, "unauthorized")
+			return
+		}
+		log.Printf("get dashboard error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get dashboard")
+		return
+	}
+
+	var req kpi.ReorderKPIsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.kpiService.ReorderKPIsForDashboard(r.Context(), dashboardID, req.KPIIDs); err != nil {
+		log.Printf("reorder KPIs error: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to reorder KPIs")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, MessageResponse{Message: "KPIs reordered"})
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
