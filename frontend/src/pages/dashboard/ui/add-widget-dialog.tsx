@@ -8,6 +8,7 @@ import {
   DialogFooter,
 } from '@/shared/components/ui/dialog'
 import { Button } from '@/shared/components/ui/button'
+import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
 import {
   Select,
@@ -34,6 +35,7 @@ export function AddWidgetDialog({
 }: AddWidgetDialogProps) {
   const [dataSourceId, setDataSourceId] = useState<string>('')
   const [measurementName, setMeasurementName] = useState<string>('')
+  const [title, setTitle] = useState<string>('')
 
   // Fetch data sources
   const { data: dataSourcesData } = useGetDataSources()
@@ -56,6 +58,7 @@ export function AddWidgetDialog({
     if (!open) {
       setDataSourceId('')
       setMeasurementName('')
+      setTitle('')
     }
   }, [open])
 
@@ -66,6 +69,7 @@ export function AddWidgetDialog({
     await onAdd({
       dataSourceId,
       measurementName,
+      title: title || undefined,
       chartType: 'area',
       dateRange: 'last_7_days',
     })
@@ -126,6 +130,20 @@ export function AddWidgetDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="title">Title (optional)</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={measurementName || 'Enter a custom title'}
+              maxLength={128}
+            />
+            <p className="text-xs text-muted-foreground">
+              Defaults to measurement name if left empty
+            </p>
           </div>
 
           <DialogFooter>

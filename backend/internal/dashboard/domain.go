@@ -16,6 +16,7 @@ var (
 	ErrCannotDeleteDefault = errors.New("cannot delete default dashboard")
 	ErrInvalidChartType    = errors.New("invalid chart type")
 	ErrInvalidDateRange    = errors.New("invalid date range")
+	ErrTitleTooLong        = errors.New("title exceeds maximum length of 128 characters")
 )
 
 // Dashboard represents a dashboard in the system.
@@ -33,6 +34,7 @@ type Widget struct {
 	ID              uuid.UUID  `json:"id"`
 	DashboardID     uuid.UUID  `json:"dashboardId"`
 	DataSourceID    uuid.UUID  `json:"dataSourceId"`
+	Title           *string    `json:"title,omitempty"`
 	MeasurementName string     `json:"measurementName"`
 	ChartType       string     `json:"chartType"` // area, bar, line
 	DateRange       string     `json:"dateRange"` // last_7_days, last_30_days, custom
@@ -81,6 +83,7 @@ type UpdateDashboardRequest struct {
 type CreateWidgetRequest struct {
 	DataSourceID    uuid.UUID  `json:"dataSourceId"`
 	MeasurementName string     `json:"measurementName"`
+	Title           *string    `json:"title,omitempty"`
 	ChartType       string     `json:"chartType"`
 	DateRange       string     `json:"dateRange"`
 	DateFrom        *time.Time `json:"dateFrom,omitempty"`
@@ -91,6 +94,7 @@ type CreateWidgetRequest struct {
 
 // UpdateWidgetRequest is the request body for updating a widget.
 type UpdateWidgetRequest struct {
+	Title     *string    `json:"title,omitempty"`
 	ChartType string     `json:"chartType"`
 	DateRange string     `json:"dateRange"`
 	DateFrom  *time.Time `json:"dateFrom,omitempty"`

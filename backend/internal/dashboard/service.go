@@ -171,6 +171,11 @@ func (s *Service) CreateWidget(ctx context.Context, orgID, dashboardID uuid.UUID
 		return nil, fmt.Errorf("failed to verify data source: %w", err)
 	}
 
+	// Validate title length
+	if req.Title != nil && len(*req.Title) > 128 {
+		return nil, ErrTitleTooLong
+	}
+
 	// Validate chart type
 	if !validChartTypes[req.ChartType] {
 		return nil, ErrInvalidChartType
@@ -221,6 +226,11 @@ func (s *Service) UpdateWidget(ctx context.Context, orgID, dashboardID, widgetID
 		return nil, ErrWidgetNotFound
 	}
 
+	// Validate title length
+	if req.Title != nil && len(*req.Title) > 128 {
+		return nil, ErrTitleTooLong
+	}
+
 	// Validate chart type
 	if !validChartTypes[req.ChartType] {
 		return nil, ErrInvalidChartType
@@ -236,6 +246,7 @@ func (s *Service) UpdateWidget(ctx context.Context, orgID, dashboardID, widgetID
 	}
 
 	// Return updated widget
+	widget.Title = req.Title
 	widget.ChartType = req.ChartType
 	widget.DateRange = req.DateRange
 	widget.DateFrom = req.DateFrom

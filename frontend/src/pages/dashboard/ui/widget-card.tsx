@@ -7,14 +7,15 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { MoreHorizontal, Trash, Pencil } from 'lucide-react'
+import { useRef } from 'react'
+import { MoreHorizontal, Trash, Pencil, Download, Copy } from 'lucide-react'
 import {
   Card,
+  CardAction,
   CardContent,
   CardHeader,
   CardTitle,
@@ -27,10 +28,12 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu'
 import { Skeleton } from '@/shared/components/ui/skeleton'
+import { Input } from '@/shared/components/ui/input'
 import type { Widget, UpdateWidgetRequest } from '@/shared/api/generated/models'
 import { useWidgetData } from '../hooks/use-widget-data'
 import { useWidgetMetadata } from '../hooks/use-widget-metadata'
 import { useWidgetEdit } from '../hooks/use-widget-edit'
+import { useChartExport } from '../hooks/use-chart-export'
 import { WidgetToolbar } from './widget-toolbar'
 import { WidgetContextBar } from './widget-context-bar'
 
@@ -62,7 +65,7 @@ function getSeriesColor(index: number, key: string): string {
   return SERIES_COLORS[index % (SERIES_COLORS.length - 1)]
 }
 
-const chartMargin = { top: 5, right: 10, left: 10, bottom: 5 }
+const chartMargin = { top: 5, right: 10, left: 0, bottom: 5 }
 
 const formatDate = (value: string) => {
   const date = new Date(value)
@@ -129,10 +132,19 @@ export function WidgetCard({
   onDelete,
   onUpdate,
 }: WidgetCardProps) {
+  // Chart ref for export functionality
+  const chartRef = useRef<HTMLDivElement>(null)
+
   // Edit state management
   const editState = useWidgetEdit({
     widget,
     onSave: onUpdate,
+  })
+
+  // Chart export functionality
+  const chartExport = useChartExport({
+    chartRef,
+    filename: widget.title || widget.measurementName || 'chart',
   })
 
   // Fetch metadata for split-by and filter options
@@ -161,7 +173,6 @@ export function WidgetCard({
     if (chartType === 'line') {
       return (
         <LineChart data={data} margin={chartMargin}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
             dataKey="date"
             {...commonAxisProps}
@@ -197,7 +208,6 @@ export function WidgetCard({
     if (chartType === 'area') {
       return (
         <AreaChart data={data} margin={chartMargin}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
             dataKey="date"
             {...commonAxisProps}
@@ -234,7 +244,6 @@ export function WidgetCard({
     // Bar chart (stacked when split)
     return (
       <BarChart data={data} margin={chartMargin}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis dataKey="date" {...commonAxisProps} tickFormatter={formatDate} />
         <YAxis {...commonAxisProps} tickFormatter={formatYAxis} />
         <Tooltip content={tooltipContent} />
@@ -258,12 +267,22 @@ export function WidgetCard({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between px-6 py-4">
-        <CardTitle className="text-base font-medium">
-          {widget.measurementName}
-        </CardTitle>
+      <CardHeader className="px-6 py-4">
+        {editState.isEditing ? (
+          <Input
+            value={editState.state.title ?? ''}
+            onChange={(e) => editState.setTitle(e.target.value || undefined)}
+            placeholder={widget.measurementName ?? 'Widget title'}
+            className="text-base font-medium h-8 max-w-xs"
+            maxLength={128}
+          />
+        ) : (
+          <CardTitle className="text-base font-medium">
+            {widget.title || widget.measurementName}
+          </CardTitle>
+        )}
         {canEdit && (
-          <div className="flex items-center gap-1">
+          <CardAction className="flex items-center gap-1">
             <Button
               variant={editState.isEditing ? 'secondary' : 'ghost'}
               size="icon"
@@ -275,6 +294,24 @@ export function WidgetCard({
                 {editState.isEditing ? 'Close edit mode' : 'Edit widget'}
               </span>
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Download className="h-4 w-4" />
+                  <span className="sr-only">Download chart</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={chartExport.copyToClipboard}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy to clipboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={chartExport.downloadAsPng}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download as PNG
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -292,7 +329,7 @@ export function WidgetCard({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </CardAction>
         )}
       </CardHeader>
 
@@ -317,9 +354,11 @@ export function WidgetCard({
         ) : data.length === 0 ? (
           <ChartEmptyState />
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            {renderChart()}
-          </ResponsiveContainer>
+          <div ref={chartRef}>
+            <ResponsiveContainer width="100%" height={300}>
+              {renderChart()}
+            </ResponsiveContainer>
+          </div>
         )}
       </CardContent>
 

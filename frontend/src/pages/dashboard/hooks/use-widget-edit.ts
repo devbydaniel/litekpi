@@ -5,6 +5,7 @@ export type ChartType = 'area' | 'bar' | 'line'
 export type DateRangeValue = 'last_24_hours' | 'last_7_days' | 'last_30_days'
 
 export interface WidgetEditState {
+  title: string | undefined
   chartType: ChartType
   dateRange: DateRangeValue
   splitBy: string | undefined
@@ -18,6 +19,7 @@ interface UseWidgetEditOptions {
 
 function getInitialState(widget: Widget): WidgetEditState {
   return {
+    title: widget.title ?? undefined,
     chartType: (widget.chartType as ChartType) ?? 'area',
     dateRange: (widget.dateRange as DateRangeValue) ?? 'last_7_days',
     splitBy: widget.splitBy ?? undefined,
@@ -26,6 +28,7 @@ function getInitialState(widget: Widget): WidgetEditState {
 }
 
 function statesEqual(a: WidgetEditState, b: WidgetEditState): boolean {
+  if (a.title !== b.title) return false
   if (a.chartType !== b.chartType) return false
   if (a.dateRange !== b.dateRange) return false
   if (a.splitBy !== b.splitBy) return false
@@ -55,6 +58,10 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
 
   const savedState = useMemo(() => getInitialState(widget), [widget])
   const isDirty = useMemo(() => !statesEqual(state, savedState), [state, savedState])
+
+  const setTitle = useCallback((title: string | undefined) => {
+    setState((prev) => ({ ...prev, title }))
+  }, [])
 
   const setChartType = useCallback((chartType: ChartType) => {
     setState((prev) => ({ ...prev, chartType }))
@@ -92,6 +99,7 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
     setIsSaving(true)
     try {
       await onSave(widget.id, {
+        title: state.title,
         chartType: state.chartType,
         dateRange: state.dateRange,
         splitBy: state.splitBy,
@@ -114,6 +122,7 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
   const previewWidget = useMemo(
     (): Widget => ({
       ...widget,
+      title: state.title,
       chartType: state.chartType,
       dateRange: state.dateRange,
       splitBy: state.splitBy,
@@ -131,6 +140,7 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
     previewWidget,
 
     // Setters
+    setTitle,
     setChartType,
     setDateRange,
     setSplitBy,

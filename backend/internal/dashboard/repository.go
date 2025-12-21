@@ -151,6 +151,7 @@ func (r *Repository) CreateWidget(ctx context.Context, dashboardID, dataSourceID
 		ID:              uuid.New(),
 		DashboardID:     dashboardID,
 		DataSourceID:    dataSourceID,
+		Title:           req.Title,
 		MeasurementName: req.MeasurementName,
 		ChartType:       req.ChartType,
 		DateRange:       req.DateRange,
@@ -168,9 +169,9 @@ func (r *Repository) CreateWidget(ctx context.Context, dashboardID, dataSourceID
 	}
 
 	_, err = r.pool.Exec(ctx,
-		`INSERT INTO widgets (id, dashboard_id, data_source_id, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		widget.ID, widget.DashboardID, widget.DataSourceID, widget.MeasurementName, widget.ChartType, widget.DateRange, widget.DateFrom, widget.DateTo, widget.SplitBy, filtersJSON, widget.Position, widget.CreatedAt, widget.UpdatedAt,
+		`INSERT INTO widgets (id, dashboard_id, data_source_id, title, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		widget.ID, widget.DashboardID, widget.DataSourceID, widget.Title, widget.MeasurementName, widget.ChartType, widget.DateRange, widget.DateFrom, widget.DateTo, widget.SplitBy, filtersJSON, widget.Position, widget.CreatedAt, widget.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -184,10 +185,10 @@ func (r *Repository) GetWidgetByID(ctx context.Context, id uuid.UUID) (*Widget, 
 	widget := &Widget{}
 	var filtersJSON []byte
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, dashboard_id, data_source_id, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at
+		`SELECT id, dashboard_id, data_source_id, title, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at
 		FROM widgets WHERE id = $1`,
 		id,
-	).Scan(&widget.ID, &widget.DashboardID, &widget.DataSourceID, &widget.MeasurementName, &widget.ChartType, &widget.DateRange, &widget.DateFrom, &widget.DateTo, &widget.SplitBy, &filtersJSON, &widget.Position, &widget.CreatedAt, &widget.UpdatedAt)
+	).Scan(&widget.ID, &widget.DashboardID, &widget.DataSourceID, &widget.Title, &widget.MeasurementName, &widget.ChartType, &widget.DateRange, &widget.DateFrom, &widget.DateTo, &widget.SplitBy, &filtersJSON, &widget.Position, &widget.CreatedAt, &widget.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -206,7 +207,7 @@ func (r *Repository) GetWidgetByID(ctx context.Context, id uuid.UUID) (*Widget, 
 // GetWidgetsByDashboardID retrieves all widgets for a dashboard.
 func (r *Repository) GetWidgetsByDashboardID(ctx context.Context, dashboardID uuid.UUID) ([]Widget, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, dashboard_id, data_source_id, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at
+		`SELECT id, dashboard_id, data_source_id, title, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at
 		FROM widgets WHERE dashboard_id = $1
 		ORDER BY position ASC`,
 		dashboardID,
@@ -220,7 +221,7 @@ func (r *Repository) GetWidgetsByDashboardID(ctx context.Context, dashboardID uu
 	for rows.Next() {
 		var w Widget
 		var filtersJSON []byte
-		if err := rows.Scan(&w.ID, &w.DashboardID, &w.DataSourceID, &w.MeasurementName, &w.ChartType, &w.DateRange, &w.DateFrom, &w.DateTo, &w.SplitBy, &filtersJSON, &w.Position, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.DashboardID, &w.DataSourceID, &w.Title, &w.MeasurementName, &w.ChartType, &w.DateRange, &w.DateFrom, &w.DateTo, &w.SplitBy, &filtersJSON, &w.Position, &w.CreatedAt, &w.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(filtersJSON, &w.Filters); err != nil {
@@ -251,8 +252,8 @@ func (r *Repository) UpdateWidget(ctx context.Context, id uuid.UUID, req UpdateW
 	}
 
 	_, err = r.pool.Exec(ctx,
-		`UPDATE widgets SET chart_type = $1, date_range = $2, date_from = $3, date_to = $4, split_by = $5, filters = $6, updated_at = NOW() WHERE id = $7`,
-		req.ChartType, req.DateRange, req.DateFrom, req.DateTo, req.SplitBy, filtersJSON, id,
+		`UPDATE widgets SET title = $1, chart_type = $2, date_range = $3, date_from = $4, date_to = $5, split_by = $6, filters = $7, updated_at = NOW() WHERE id = $8`,
+		req.Title, req.ChartType, req.DateRange, req.DateFrom, req.DateTo, req.SplitBy, filtersJSON, id,
 	)
 	return err
 }
