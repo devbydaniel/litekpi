@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { ChevronRight, FileText } from 'lucide-react'
 import { EmptyState } from '@/shared/components/ui/empty-state'
 import {
@@ -15,10 +16,9 @@ import type { Report } from '@/shared/api/generated/models'
 interface ReportListProps {
   reports: Report[]
   isLoading: boolean
-  onSelect: (report: Report) => void
 }
 
-export function ReportList({ reports, isLoading, onSelect }: ReportListProps) {
+export function ReportList({ reports, isLoading }: ReportListProps) {
   if (isLoading) {
     return <ReportListSkeleton />
   }
@@ -38,17 +38,19 @@ export function ReportList({ reports, isLoading, onSelect }: ReportListProps) {
       {reports.map((report, index) => (
         <div key={report.id}>
           {index > 0 && <ItemSeparator />}
-          <Item className="cursor-pointer" onClick={() => onSelect(report)}>
-            <ItemContent>
-              <ItemTitle>{report.name}</ItemTitle>
-              <ItemDescription>
-                Created {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : '-'}
-              </ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            </ItemActions>
-          </Item>
+          <Link to="/reports/$id" params={{ id: report.id! }}>
+            <Item className="cursor-pointer">
+              <ItemContent>
+                <ItemTitle>{report.name}</ItemTitle>
+                <ItemDescription>
+                  Created {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : '-'}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </ItemActions>
+            </Item>
+          </Link>
         </div>
       ))}
     </ItemGroup>

@@ -18,17 +18,17 @@ import { EmptyState } from '@/shared/components/ui/empty-state'
 import { KpiCard, KpiCardSkeleton } from '@/shared/components/kpi-card'
 import { KpiForm } from '@/shared/components/kpi-form'
 import { useReportDetail } from '../hooks/use-report-detail'
-import type { Report, Kpi, UpdateKPIRequest, CreateKPIRequest } from '@/shared/api/generated/models'
+import type { Kpi, UpdateKPIRequest, CreateKPIRequest } from '@/shared/api/generated/models'
 
 interface ReportDetailProps {
-  report: Report
+  reportId: string
   canEdit: boolean
   addKpiOpen?: boolean
   onAddKpiOpenChange?: (open: boolean) => void
 }
 
 export function ReportDetail({
-  report,
+  reportId,
   canEdit,
   addKpiOpen = false,
   onAddKpiOpenChange,
@@ -50,7 +50,7 @@ export function ReportDetail({
     deleteKpi,
     isAddingKpi,
     isUpdatingKpi,
-  } = useReportDetail(report.id)
+  } = useReportDetail(reportId)
 
   const handleAddKpi = async (values: CreateKPIRequest) => {
     await addKpi(values)

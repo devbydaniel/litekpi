@@ -6,8 +6,11 @@ import {
   usePostReportsIdKpis,
   usePutReportsIdKpisKpiId,
   useDeleteReportsIdKpisKpiId,
+  usePutReportsId,
+  useDeleteReportsId,
   getGetReportsIdQueryKey,
   getGetReportsIdComputeQueryKey,
+  getGetReportsQueryKey,
 } from '@/shared/api/generated/api'
 import type { CreateKPIRequest, UpdateKPIRequest } from '@/shared/api/generated/models'
 
@@ -33,6 +36,33 @@ export function useReportDetail(reportId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: getGetReportsIdComputeQueryKey(reportId) })
     }
   }
+
+  // Update report mutation
+  const updateReportMutation = usePutReportsId({
+    mutation: {
+      onSuccess: () => {
+        invalidateReport()
+        queryClient.invalidateQueries({ queryKey: getGetReportsQueryKey() })
+        toast.success('Report updated')
+      },
+      onError: () => {
+        toast.error('Failed to update report')
+      },
+    },
+  })
+
+  // Delete report mutation
+  const deleteReportMutation = useDeleteReportsId({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetReportsQueryKey() })
+        toast.success('Report deleted')
+      },
+      onError: () => {
+        toast.error('Failed to delete report')
+      },
+    },
+  })
 
   // Create KPI mutation
   const createKpiMutation = usePostReportsIdKpis({
@@ -73,6 +103,16 @@ export function useReportDetail(reportId: string | undefined) {
     },
   })
 
+  const updateReport = async (name: string) => {
+    if (!reportId) return
+    await updateReportMutation.mutateAsync({ id: reportId, data: { name } })
+  }
+
+  const deleteReport = async () => {
+    if (!reportId) return
+    await deleteReportMutation.mutateAsync({ id: reportId })
+  }
+
   const addKpi = async (kpi: CreateKPIRequest) => {
     if (!reportId) return
     await createKpiMutation.mutateAsync({ id: reportId, data: kpi })
@@ -89,12 +129,15 @@ export function useReportDetail(reportId: string | undefined) {
   }
 
   return {
-    report: reportData,
-    computedReport: computedData,
+    report: reportData?.report,
     kpis: reportData?.kpis ?? [],
     computedKpis: computedData?.kpis ?? [],
     isLoadingReport,
     isComputingKpis,
+    updateReport,
+    deleteReport,
+    isUpdatingReport: updateReportMutation.isPending,
+    isDeletingReport: deleteReportMutation.isPending,
     addKpi,
     updateKpi,
     deleteKpi,
