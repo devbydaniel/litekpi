@@ -12,11 +12,11 @@ import { Skeleton } from '@/shared/components/ui/skeleton'
 import { EmptyState } from '@/shared/components/ui/empty-state'
 import { useAuth } from '@/shared/hooks/use-auth'
 import { useDashboard } from './hooks/use-dashboard'
-import { useDashboardKpis } from './hooks/use-dashboard-kpis'
-import { WidgetCard } from './ui/widget-card'
-import { AddWidgetDialog } from './ui/add-widget-dialog'
-import { AddKpiDialog } from './ui/add-kpi-dialog'
-import { KpiGrid } from './ui/kpi-grid'
+import { useScalarMetrics } from './hooks/use-scalar-metrics'
+import { TimeSeriesCard } from './ui/time-series-card'
+import { AddTimeSeriesDialog } from './ui/add-time-series-dialog'
+import { AddScalarMetricDialog } from './ui/add-scalar-metric-dialog'
+import { ScalarMetricGrid } from './ui/scalar-metric-grid'
 import { DashboardSwitcher } from './ui/dashboard-switcher'
 
 interface DashboardPageProps {
@@ -27,30 +27,30 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
   const { user } = useAuth()
   const canEdit = user?.role === 'admin' || user?.role === 'editor'
 
-  const [addWidgetOpen, setAddWidgetOpen] = useState(false)
-  const [addKpiOpen, setAddKpiOpen] = useState(false)
+  const [addTimeSeriesOpen, setAddTimeSeriesOpen] = useState(false)
+  const [addMetricOpen, setAddMetricOpen] = useState(false)
 
   const {
     dashboards,
     dashboard,
-    widgets,
+    timeSeries,
     isLoading,
-    addWidget,
-    updateWidget,
-    deleteWidget,
-    isAddingWidget,
+    addTimeSeries,
+    updateTimeSeries,
+    deleteTimeSeries,
+    isAddingTimeSeries,
   } = useDashboard(dashboardId)
 
   const {
-    kpis,
-    computedKpis,
-    isComputingKpis,
-    addKpi,
-    updateKpi,
-    deleteKpi,
-    isAddingKpi,
-    isUpdatingKpi,
-  } = useDashboardKpis(dashboard?.id)
+    scalarMetrics,
+    computedMetrics,
+    isComputingMetrics,
+    addMetric,
+    updateMetric,
+    deleteMetric,
+    isAddingMetric,
+    isUpdatingMetric,
+  } = useScalarMetrics(dashboard?.id)
 
   const title = dashboards.length > 1 ? (
     <DashboardSwitcher dashboards={dashboards} currentDashboard={dashboard} />
@@ -58,7 +58,7 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
     dashboard?.name ?? 'Dashboard'
   )
 
-  const hasContent = widgets.length > 0 || computedKpis.length > 0
+  const hasContent = timeSeries.length > 0 || computedMetrics.length > 0
 
   return (
     <AuthenticatedLayout
@@ -74,11 +74,11 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setAddKpiOpen(true)}>
-                Add KPI
+              <DropdownMenuItem onClick={() => setAddMetricOpen(true)}>
+                Add Metric
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setAddWidgetOpen(true)}>
-                Add Widget
+              <DropdownMenuItem onClick={() => setAddTimeSeriesOpen(true)}>
+                Add Chart
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -96,45 +96,45 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
           title="No content yet"
           description={
             canEdit
-              ? 'Add KPIs or widgets to start tracking metrics.'
+              ? 'Add metrics or charts to start tracking data.'
               : 'No content has been added to this dashboard.'
           }
         />
       ) : (
         <div className="space-y-6">
-          <KpiGrid
-            kpis={kpis}
-            computedKpis={computedKpis}
-            isLoading={isComputingKpis}
+          <ScalarMetricGrid
+            metrics={scalarMetrics}
+            computedMetrics={computedMetrics}
+            isLoading={isComputingMetrics}
             canEdit={canEdit}
-            onUpdate={updateKpi}
-            onDelete={deleteKpi}
-            isUpdating={isUpdatingKpi}
+            onUpdate={updateMetric}
+            onDelete={deleteMetric}
+            isUpdating={isUpdatingMetric}
           />
-          {widgets.map((widget) => (
-            <WidgetCard
-              key={widget.id}
-              widget={widget}
+          {timeSeries.map((ts) => (
+            <TimeSeriesCard
+              key={ts.id}
+              timeSeries={ts}
               canEdit={canEdit}
-              onDelete={() => widget.id && deleteWidget(widget.id)}
-              onUpdate={updateWidget}
+              onDelete={() => ts.id && deleteTimeSeries(ts.id)}
+              onUpdate={updateTimeSeries}
             />
           ))}
         </div>
       )}
 
-      <AddWidgetDialog
-        open={addWidgetOpen}
-        onOpenChange={setAddWidgetOpen}
-        onAdd={addWidget}
-        isLoading={isAddingWidget}
+      <AddTimeSeriesDialog
+        open={addTimeSeriesOpen}
+        onOpenChange={setAddTimeSeriesOpen}
+        onAdd={addTimeSeries}
+        isLoading={isAddingTimeSeries}
       />
 
-      <AddKpiDialog
-        open={addKpiOpen}
-        onOpenChange={setAddKpiOpen}
-        onAdd={addKpi}
-        isLoading={isAddingKpi}
+      <AddScalarMetricDialog
+        open={addMetricOpen}
+        onOpenChange={setAddMetricOpen}
+        onAdd={addMetric}
+        isLoading={isAddingMetric}
       />
     </AuthenticatedLayout>
   )

@@ -4,7 +4,7 @@ import type {
   GetMeasurementDataResponse,
   GetMeasurementDataSplitResponse,
   SplitSeries,
-  Widget,
+  TimeSeries,
   Filter,
 } from '@/shared/api/generated/models'
 import { customInstance } from '@/shared/api/client'
@@ -124,17 +124,17 @@ async function fetchMeasurementDataSplit(
   })
 }
 
-export function useWidgetData(widget: Widget) {
-  const dataSourceId = widget.dataSourceId ?? ''
-  const measurementName = widget.measurementName ?? ''
-  const dateRange = widget.dateRange ?? 'last_7_days'
-  const splitBy = widget.splitBy
-  const filters = widget.filters ?? []
+export function useTimeSeriesData(timeSeries: TimeSeries) {
+  const dataSourceId = timeSeries.dataSourceId ?? ''
+  const measurementName = timeSeries.measurementName ?? ''
+  const dateRange = timeSeries.dateRange ?? 'last_7_days'
+  const splitBy = timeSeries.splitBy
+  const filters = timeSeries.filters ?? []
 
   // Calculate start and end dates from date range preset
   const { start, end } = useMemo(() => getDateRangeFromValue(dateRange), [dateRange])
 
-  // Build clean metadata filters (from widget filters)
+  // Build clean metadata filters (from time series filters)
   const cleanMetadataFilters = useMemo(() => {
     const clean: Record<string, string> = {}
     for (const filter of filters as Filter[]) {
@@ -149,7 +149,7 @@ export function useWidgetData(widget: Widget) {
 
   // Fetch non-split chart data
   const { data: nonSplitData, isLoading: isLoadingNonSplit } = useQuery({
-    queryKey: ['widget', widget.id, 'data', dataSourceId, measurementName, dateRange, cleanMetadataFilters],
+    queryKey: ['timeSeries', timeSeries.id, 'data', dataSourceId, measurementName, dateRange, cleanMetadataFilters],
     queryFn: () =>
       fetchMeasurementData(dataSourceId, measurementName, {
         start: start.toISOString(),
@@ -162,8 +162,8 @@ export function useWidgetData(widget: Widget) {
   // Fetch split chart data
   const { data: splitData, isLoading: isLoadingSplit } = useQuery({
     queryKey: [
-      'widget',
-      widget.id,
+      'timeSeries',
+      timeSeries.id,
       'data',
       'split',
       dataSourceId,
@@ -205,6 +205,6 @@ export function useWidgetData(widget: Widget) {
     seriesKeys,
     isSplit: splitBy !== undefined && splitBy !== null && splitBy !== '',
     isLoading,
-    chartType: (widget.chartType ?? 'area') as ChartType,
+    chartType: (timeSeries.chartType ?? 'area') as ChartType,
   }
 }

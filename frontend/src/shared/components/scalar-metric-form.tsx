@@ -30,10 +30,12 @@ import {
   useGetDataSourcesDataSourceIdMeasurementsNameMetadata,
 } from '@/shared/api/generated/api'
 import type {
-  CreateKPIRequest,
-  UpdateKPIRequest,
-  Kpi,
+  CreateScalarMetricRequest,
+  UpdateScalarMetricRequest,
+  ScalarMetric,
   Filter,
+  Aggregation,
+  ComparisonDisplayType,
 } from '@/shared/api/generated/models'
 
 const TIMEFRAME_OPTIONS = [
@@ -53,7 +55,7 @@ const COMPARISON_DISPLAY_OPTIONS = [
   { value: 'absolute', label: 'Absolute' },
 ]
 
-export interface KpiFormValues {
+export interface ScalarMetricFormValues {
   dataSourceId: string
   measurementName: string
   label: string
@@ -64,29 +66,29 @@ export interface KpiFormValues {
   comparisonDisplayType: string
 }
 
-interface KpiFormProps {
-  initialValues?: Kpi
-  onSubmit: (values: CreateKPIRequest | UpdateKPIRequest) => Promise<void>
+interface ScalarMetricFormProps {
+  initialValues?: ScalarMetric
+  onSubmit: (values: CreateScalarMetricRequest | UpdateScalarMetricRequest) => Promise<void>
   onCancel: () => void
   isLoading: boolean
   submitLabel?: string
 }
 
-export function KpiForm({
+export function ScalarMetricForm({
   initialValues,
   onSubmit,
   onCancel,
   isLoading,
   submitLabel = 'Save',
-}: KpiFormProps) {
+}: ScalarMetricFormProps) {
   const [dataSourceId, setDataSourceId] = useState(initialValues?.dataSourceId ?? '')
   const [measurementName, setMeasurementName] = useState(initialValues?.measurementName ?? '')
   const [label, setLabel] = useState(initialValues?.label ?? '')
-  const [timeframe, setTimeframe] = useState(initialValues?.timeframe ?? 'last_30_days')
-  const [aggregation, setAggregation] = useState(initialValues?.aggregation ?? 'sum')
+  const [timeframe, setTimeframe] = useState<string>(initialValues?.timeframe ?? 'last_30_days')
+  const [aggregation, setAggregation] = useState<string>(initialValues?.aggregation ?? 'sum')
   const [filters, setFilters] = useState<Filter[]>(initialValues?.filters ?? [])
   const [comparisonEnabled, setComparisonEnabled] = useState(initialValues?.comparisonEnabled ?? false)
-  const [comparisonDisplayType, setComparisonDisplayType] = useState(initialValues?.comparisonDisplayType ?? 'percent')
+  const [comparisonDisplayType, setComparisonDisplayType] = useState<string>(initialValues?.comparisonDisplayType ?? 'percent')
 
   // Fetch data sources
   const { data: dataSourcesData } = useGetDataSources()
@@ -148,10 +150,10 @@ export function KpiForm({
       measurementName,
       label: label || measurementName,
       timeframe,
-      aggregation,
+      aggregation: aggregation as Aggregation,
       filters: filters.length > 0 ? filters : undefined,
       comparisonEnabled,
-      comparisonDisplayType: comparisonEnabled ? comparisonDisplayType : undefined,
+      comparisonDisplayType: comparisonEnabled ? comparisonDisplayType as ComparisonDisplayType : undefined,
     })
   }
 

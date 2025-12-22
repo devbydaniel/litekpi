@@ -26,7 +26,6 @@ backend/
 │   ├── ingest/                 # Data ingestion API
 │   ├── dashboard/              # Dashboards & widgets
 │   ├── report/                 # Scheduled reports
-│   ├── team/                   # Team access
 │   └── platform/               # Shared infrastructure
 │       ├── config/
 │       ├── database/
@@ -90,6 +89,7 @@ frontend/src/
 ```
 
 **Conventions:**
+
 - `routes/` - Only routing logic (guards, param extraction). Import and render pages.
 - `layouts/` - Accept `children` prop. Independent from routes.
 - `widgets/` - Complex, self-contained UI blocks that combine multiple components and may have their own state/logic.
@@ -132,6 +132,7 @@ make dev-stop
 ```
 
 Dev services:
+
 - PostgreSQL: `localhost:5432` (litekpi/secret)
 - Mailcatcher SMTP: `localhost:1025`
 - Mailcatcher UI: `http://localhost:1080`

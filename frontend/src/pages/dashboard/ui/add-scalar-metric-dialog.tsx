@@ -5,23 +5,23 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/shared/components/ui/dialog'
-import { KpiForm } from '@/shared/components/kpi-form'
-import type { CreateKPIRequest } from '@/shared/api/generated/models'
+import { ScalarMetricForm } from '@/shared/components/scalar-metric-form'
+import type { CreateScalarMetricRequest } from '@/shared/api/generated/models'
 
-interface AddKpiDialogProps {
+interface AddScalarMetricDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: (kpi: CreateKPIRequest) => Promise<void>
+  onAdd: (metric: CreateScalarMetricRequest) => Promise<void>
   isLoading: boolean
 }
 
-export function AddKpiDialog({
+export function AddScalarMetricDialog({
   open,
   onOpenChange,
   onAdd,
   isLoading,
-}: AddKpiDialogProps) {
-  const handleSubmit = async (values: CreateKPIRequest) => {
+}: AddScalarMetricDialogProps) {
+  const handleSubmit = async (values: CreateScalarMetricRequest) => {
     await onAdd(values)
     onOpenChange(false)
   }
@@ -30,17 +30,17 @@ export function AddKpiDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add KPI</DialogTitle>
+          <DialogTitle>Add Metric</DialogTitle>
           <DialogDescription>
-            Create a KPI card to display a single aggregated metric value.
+            Create a metric card to display a single aggregated value.
           </DialogDescription>
         </DialogHeader>
 
-        <KpiForm
+        <ScalarMetricForm
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
           isLoading={isLoading}
-          submitLabel="Add KPI"
+          submitLabel="Add Metric"
         />
       </DialogContent>
     </Dialog>

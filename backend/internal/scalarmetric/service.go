@@ -1,4 +1,4 @@
-package kpi
+package scalarmetric
 
 import (
 	"context"
@@ -12,14 +12,14 @@ import (
 	"github.com/devbydaniel/litekpi/internal/ingest"
 )
 
-// Service handles KPI business logic.
+// Service handles scalar metric business logic.
 type Service struct {
 	repo              *Repository
 	ingestService     *ingest.Service
 	dataSourceService *datasource.Service
 }
 
-// NewService creates a new KPI service.
+// NewService creates a new scalar metric service.
 func NewService(repo *Repository, ingestService *ingest.Service, dataSourceService *datasource.Service) *Service {
 	return &Service{
 		repo:              repo,
@@ -28,45 +28,27 @@ func NewService(repo *Repository, ingestService *ingest.Service, dataSourceServi
 	}
 }
 
-// CreateKPIForDashboard creates a new KPI for a dashboard.
-func (s *Service) CreateKPIForDashboard(ctx context.Context, orgID, dashboardID uuid.UUID, req CreateKPIRequest) (*KPI, error) {
+// Create creates a new scalar metric.
+// The caller is responsible for verifying dashboard ownership.
+func (s *Service) Create(ctx context.Context, orgID, dashboardID uuid.UUID, req CreateScalarMetricRequest) (*ScalarMetric, error) {
 	if err := s.validateCreateRequest(ctx, orgID, req); err != nil {
 		return nil, err
 	}
 
-	maxPos, err := s.repo.GetMaxKPIPositionForDashboard(ctx, dashboardID)
+	maxPos, err := s.repo.GetMaxPosition(ctx, dashboardID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get max KPI position: %w", err)
+		return nil, fmt.Errorf("failed to get max position: %w", err)
 	}
 
-	kpi, err := s.repo.CreateKPIForDashboard(ctx, dashboardID, req.DataSourceID, req, maxPos+1)
+	sm, err := s.repo.Create(ctx, dashboardID, req.DataSourceID, req, maxPos+1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create KPI: %w", err)
+		return nil, fmt.Errorf("failed to create scalar metric: %w", err)
 	}
 
-	return kpi, nil
+	return sm, nil
 }
 
-// CreateKPIForReport creates a new KPI for a report.
-func (s *Service) CreateKPIForReport(ctx context.Context, orgID, reportID uuid.UUID, req CreateKPIRequest) (*KPI, error) {
-	if err := s.validateCreateRequest(ctx, orgID, req); err != nil {
-		return nil, err
-	}
-
-	maxPos, err := s.repo.GetMaxKPIPositionForReport(ctx, reportID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get max KPI position: %w", err)
-	}
-
-	kpi, err := s.repo.CreateKPIForReport(ctx, reportID, req.DataSourceID, req, maxPos+1)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create KPI: %w", err)
-	}
-
-	return kpi, nil
-}
-
-func (s *Service) validateCreateRequest(ctx context.Context, orgID uuid.UUID, req CreateKPIRequest) error {
+func (s *Service) validateCreateRequest(ctx context.Context, orgID uuid.UUID, req CreateScalarMetricRequest) error {
 	// Validate label
 	label := strings.TrimSpace(req.Label)
 	if label == "" {
@@ -87,13 +69,13 @@ func (s *Service) validateCreateRequest(ctx context.Context, orgID uuid.UUID, re
 	}
 
 	// Validate aggregation
-	if !IsValidAggregation(req.Aggregation) {
+	if !req.Aggregation.IsValid() {
 		return ErrInvalidAggregation
 	}
 
 	// Validate comparison display type if comparison is enabled
 	if req.ComparisonEnabled && req.ComparisonDisplayType != nil {
-		if !IsValidComparisonDisplayType(*req.ComparisonDisplayType) {
+		if !req.ComparisonDisplayType.IsValid() {
 			return ErrInvalidComparisonType
 		}
 	}
@@ -107,38 +89,42 @@ func (s *Service) validateCreateRequest(ctx context.Context, orgID uuid.UUID, re
 	return nil
 }
 
-// GetKPIsByDashboardID retrieves all KPIs for a dashboard.
-func (s *Service) GetKPIsByDashboardID(ctx context.Context, dashboardID uuid.UUID) ([]KPI, error) {
-	kpis, err := s.repo.GetKPIsByDashboardID(ctx, dashboardID)
+// GetByDashboardID retrieves all scalar metrics for a dashboard.
+func (s *Service) GetByDashboardID(ctx context.Context, dashboardID uuid.UUID) ([]ScalarMetric, error) {
+	scalarMetrics, err := s.repo.GetByDashboardID(ctx, dashboardID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get KPIs: %w", err)
+		return nil, fmt.Errorf("failed to get scalar metrics: %w", err)
 	}
-	return kpis, nil
+	return scalarMetrics, nil
 }
 
-// GetKPIsByReportID retrieves all KPIs for a report.
-func (s *Service) GetKPIsByReportID(ctx context.Context, reportID uuid.UUID) ([]KPI, error) {
-	kpis, err := s.repo.GetKPIsByReportID(ctx, reportID)
+// GetByID retrieves a scalar metric by its ID.
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ScalarMetric, error) {
+	sm, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get KPIs: %w", err)
+		return nil, fmt.Errorf("failed to get scalar metric: %w", err)
 	}
-	return kpis, nil
+	if sm == nil {
+		return nil, ErrScalarMetricNotFound
+	}
+	return sm, nil
 }
 
-// GetKPIByID retrieves a KPI by its ID.
-func (s *Service) GetKPIByID(ctx context.Context, id uuid.UUID) (*KPI, error) {
-	kpi, err := s.repo.GetKPIByID(ctx, id)
+// Update updates a scalar metric's configuration.
+// The caller is responsible for verifying dashboard ownership.
+func (s *Service) Update(ctx context.Context, dashboardID, scalarMetricID uuid.UUID, req UpdateScalarMetricRequest) (*ScalarMetric, error) {
+	// Verify scalar metric exists and belongs to dashboard
+	sm, err := s.repo.GetByID(ctx, scalarMetricID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get KPI: %w", err)
+		return nil, fmt.Errorf("failed to get scalar metric: %w", err)
 	}
-	if kpi == nil {
-		return nil, ErrKPINotFound
+	if sm == nil {
+		return nil, ErrScalarMetricNotFound
 	}
-	return kpi, nil
-}
+	if sm.DashboardID != dashboardID {
+		return nil, ErrScalarMetricNotFound
+	}
 
-// UpdateKPI updates a KPI's configuration.
-func (s *Service) UpdateKPI(ctx context.Context, kpiID uuid.UUID, req UpdateKPIRequest) (*KPI, error) {
 	// Validate label
 	label := strings.TrimSpace(req.Label)
 	if label == "" {
@@ -154,77 +140,83 @@ func (s *Service) UpdateKPI(ctx context.Context, kpiID uuid.UUID, req UpdateKPIR
 	}
 
 	// Validate aggregation
-	if !IsValidAggregation(req.Aggregation) {
+	if !req.Aggregation.IsValid() {
 		return nil, ErrInvalidAggregation
 	}
 
 	// Validate comparison display type if comparison is enabled
 	if req.ComparisonEnabled && req.ComparisonDisplayType != nil {
-		if !IsValidComparisonDisplayType(*req.ComparisonDisplayType) {
+		if !req.ComparisonDisplayType.IsValid() {
 			return nil, ErrInvalidComparisonType
 		}
 	}
 
-	if err := s.repo.UpdateKPI(ctx, kpiID, req); err != nil {
-		return nil, fmt.Errorf("failed to update KPI: %w", err)
+	if err := s.repo.Update(ctx, scalarMetricID, req); err != nil {
+		return nil, fmt.Errorf("failed to update scalar metric: %w", err)
 	}
 
-	// Return updated KPI
-	return s.repo.GetKPIByID(ctx, kpiID)
+	// Return updated scalar metric
+	return s.repo.GetByID(ctx, scalarMetricID)
 }
 
-// DeleteKPI deletes a KPI.
-func (s *Service) DeleteKPI(ctx context.Context, kpiID uuid.UUID) error {
-	if err := s.repo.DeleteKPI(ctx, kpiID); err != nil {
-		return fmt.Errorf("failed to delete KPI: %w", err)
+// Delete deletes a scalar metric.
+// The caller is responsible for verifying dashboard ownership.
+func (s *Service) Delete(ctx context.Context, dashboardID, scalarMetricID uuid.UUID) error {
+	// Verify scalar metric exists and belongs to dashboard
+	sm, err := s.repo.GetByID(ctx, scalarMetricID)
+	if err != nil {
+		return fmt.Errorf("failed to get scalar metric: %w", err)
 	}
-	return nil
-}
-
-// ReorderKPIsForDashboard reorders KPIs on a dashboard.
-func (s *Service) ReorderKPIsForDashboard(ctx context.Context, dashboardID uuid.UUID, kpiIDs []uuid.UUID) error {
-	if err := s.repo.UpdateKPIPositionsForDashboard(ctx, dashboardID, kpiIDs); err != nil {
-		return fmt.Errorf("failed to reorder KPIs: %w", err)
+	if sm == nil {
+		return ErrScalarMetricNotFound
 	}
-	return nil
-}
+	if sm.DashboardID != dashboardID {
+		return ErrScalarMetricNotFound
+	}
 
-// ReorderKPIsForReport reorders KPIs on a report.
-func (s *Service) ReorderKPIsForReport(ctx context.Context, reportID uuid.UUID, kpiIDs []uuid.UUID) error {
-	if err := s.repo.UpdateKPIPositionsForReport(ctx, reportID, kpiIDs); err != nil {
-		return fmt.Errorf("failed to reorder KPIs: %w", err)
+	if err := s.repo.Delete(ctx, scalarMetricID); err != nil {
+		return fmt.Errorf("failed to delete scalar metric: %w", err)
 	}
 	return nil
 }
 
-// ComputeKPIs calculates the values for a list of KPIs.
-func (s *Service) ComputeKPIs(ctx context.Context, kpis []KPI) ([]ComputedKPI, error) {
-	computedKPIs := make([]ComputedKPI, len(kpis))
+// Reorder reorders scalar metrics on a dashboard.
+// The caller is responsible for verifying dashboard ownership.
+func (s *Service) Reorder(ctx context.Context, dashboardID uuid.UUID, scalarMetricIDs []uuid.UUID) error {
+	if err := s.repo.UpdatePositions(ctx, dashboardID, scalarMetricIDs); err != nil {
+		return fmt.Errorf("failed to reorder scalar metrics: %w", err)
+	}
+	return nil
+}
 
-	for i, kpi := range kpis {
-		computed, err := s.computeKPI(ctx, kpi)
+// Compute calculates the values for a list of scalar metrics.
+func (s *Service) Compute(ctx context.Context, scalarMetrics []ScalarMetric) ([]ComputedScalarMetric, error) {
+	computed := make([]ComputedScalarMetric, len(scalarMetrics))
+
+	for i, sm := range scalarMetrics {
+		result, err := s.computeOne(ctx, sm)
 		if err != nil {
-			return nil, fmt.Errorf("failed to compute KPI %s: %w", kpi.ID, err)
+			return nil, fmt.Errorf("failed to compute scalar metric %s: %w", sm.ID, err)
 		}
-		computedKPIs[i] = *computed
+		computed[i] = *result
 	}
 
-	return computedKPIs, nil
+	return computed, nil
 }
 
-func (s *Service) computeKPI(ctx context.Context, kpi KPI) (*ComputedKPI, error) {
+func (s *Service) computeOne(ctx context.Context, sm ScalarMetric) (*ComputedScalarMetric, error) {
 	// Calculate date ranges
-	currentStart, currentEnd := getTimeframeRange(kpi.Timeframe)
+	currentStart, currentEnd := getTimeframeRange(sm.Timeframe)
 
 	// Build metadata filters
 	filters := make(map[string]string)
-	for _, f := range kpi.Filters {
+	for _, f := range sm.Filters {
 		filters[f.Key] = f.Value
 	}
 
 	// Query current period
 	currentData, err := s.ingestService.GetAggregatedMeasurements(
-		ctx, kpi.DataSourceID, kpi.MeasurementName,
+		ctx, sm.DataSourceID, sm.MeasurementName,
 		currentStart, currentEnd, filters,
 	)
 	if err != nil {
@@ -232,26 +224,26 @@ func (s *Service) computeKPI(ctx context.Context, kpi KPI) (*ComputedKPI, error)
 	}
 
 	// Calculate value based on aggregation
-	value := aggregate(currentData, kpi.Aggregation)
+	value := aggregate(currentData, sm.Aggregation)
 
-	computed := &ComputedKPI{
-		KPI:   kpi,
-		Value: value,
+	computed := &ComputedScalarMetric{
+		ScalarMetric: sm,
+		Value:        value,
 	}
 
 	// Handle comparison if enabled
-	if kpi.ComparisonEnabled {
-		previousStart, previousEnd := getPreviousTimeframeRange(kpi.Timeframe, currentStart, currentEnd)
+	if sm.ComparisonEnabled {
+		previousStart, previousEnd := getPreviousTimeframeRange(sm.Timeframe, currentStart, currentEnd)
 
 		previousData, err := s.ingestService.GetAggregatedMeasurements(
-			ctx, kpi.DataSourceID, kpi.MeasurementName,
+			ctx, sm.DataSourceID, sm.MeasurementName,
 			previousStart, previousEnd, filters,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get previous period data: %w", err)
 		}
 
-		previousValue := aggregate(previousData, kpi.Aggregation)
+		previousValue := aggregate(previousData, sm.Aggregation)
 		computed.PreviousValue = &previousValue
 
 		change := value - previousValue
@@ -266,7 +258,7 @@ func (s *Service) computeKPI(ctx context.Context, kpi KPI) (*ComputedKPI, error)
 	return computed, nil
 }
 
-func aggregate(data []ingest.AggregatedDataPoint, aggregationType string) float64 {
+func aggregate(data []ingest.AggregatedDataPoint, aggregationType Aggregation) float64 {
 	if len(data) == 0 {
 		return 0
 	}
@@ -279,12 +271,12 @@ func aggregate(data []ingest.AggregatedDataPoint, aggregationType string) float6
 	}
 
 	switch aggregationType {
-	case "average":
+	case AggregationAverage:
 		if totalCount == 0 {
 			return 0
 		}
 		return totalSum / float64(totalCount)
-	default: // "sum"
+	default: // AggregationSum
 		return totalSum
 	}
 }

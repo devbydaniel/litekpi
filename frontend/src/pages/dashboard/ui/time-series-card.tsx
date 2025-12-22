@@ -29,19 +29,19 @@ import {
 } from '@/shared/components/ui/dropdown-menu'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import { Input } from '@/shared/components/ui/input'
-import type { Widget, UpdateWidgetRequest } from '@/shared/api/generated/models'
-import { useWidgetData } from '../hooks/use-widget-data'
-import { useWidgetMetadata } from '../hooks/use-widget-metadata'
-import { useWidgetEdit } from '../hooks/use-widget-edit'
+import type { TimeSeries, UpdateTimeSeriesRequest } from '@/shared/api/generated/models'
+import { useTimeSeriesData } from '../hooks/use-time-series-data'
+import { useTimeSeriesMetadata } from '../hooks/use-time-series-metadata'
+import { useTimeSeriesEdit } from '../hooks/use-time-series-edit'
 import { useChartExport } from '../hooks/use-chart-export'
-import { WidgetToolbar } from './widget-toolbar'
-import { WidgetContextBar } from './widget-context-bar'
+import { TimeSeriesToolbar } from './time-series-toolbar'
+import { TimeSeriesContextBar } from './time-series-context-bar'
 
-interface WidgetCardProps {
-  widget: Widget
+interface TimeSeriesCardProps {
+  timeSeries: TimeSeries
   canEdit: boolean
   onDelete: () => void
-  onUpdate: (widgetId: string, update: UpdateWidgetRequest) => Promise<void>
+  onUpdate: (timeSeriesId: string, update: UpdateTimeSeriesRequest) => Promise<void>
 }
 
 const SERIES_COLORS = [
@@ -126,36 +126,36 @@ function ChartEmptyState() {
   )
 }
 
-export function WidgetCard({
-  widget,
+export function TimeSeriesCard({
+  timeSeries,
   canEdit,
   onDelete,
   onUpdate,
-}: WidgetCardProps) {
+}: TimeSeriesCardProps) {
   // Chart ref for export functionality
   const chartRef = useRef<HTMLDivElement>(null)
 
   // Edit state management
-  const editState = useWidgetEdit({
-    widget,
+  const editState = useTimeSeriesEdit({
+    timeSeries,
     onSave: onUpdate,
   })
 
   // Chart export functionality
   const chartExport = useChartExport({
     chartRef,
-    filename: widget.title || widget.measurementName || 'chart',
+    filename: timeSeries.title || timeSeries.measurementName || 'chart',
   })
 
   // Fetch metadata for split-by and filter options
-  const { metadata } = useWidgetMetadata(
-    widget.dataSourceId ?? '',
-    widget.measurementName ?? ''
+  const { metadata } = useTimeSeriesMetadata(
+    timeSeries.dataSourceId ?? '',
+    timeSeries.measurementName ?? ''
   )
 
-  // Use preview widget for live updates
-  const { data, seriesKeys, isSplit, isLoading, chartType } = useWidgetData(
-    editState.previewWidget
+  // Use preview time series for live updates
+  const { data, seriesKeys, isSplit, isLoading, chartType } = useTimeSeriesData(
+    editState.previewTimeSeries
   )
 
   const commonAxisProps = {
@@ -272,13 +272,13 @@ export function WidgetCard({
           <Input
             value={editState.state.title ?? ''}
             onChange={(e) => editState.setTitle(e.target.value || undefined)}
-            placeholder={widget.measurementName ?? 'Widget title'}
+            placeholder={timeSeries.measurementName ?? 'Chart title'}
             className="text-base font-medium h-8 max-w-xs"
             maxLength={128}
           />
         ) : (
           <CardTitle className="text-base font-medium">
-            {widget.title || widget.measurementName}
+            {timeSeries.title || timeSeries.measurementName}
           </CardTitle>
         )}
         {canEdit && (
@@ -291,7 +291,7 @@ export function WidgetCard({
             >
               <Pencil className="h-4 w-4" />
               <span className="sr-only">
-                {editState.isEditing ? 'Close edit mode' : 'Edit widget'}
+                {editState.isEditing ? 'Close edit mode' : 'Edit chart'}
               </span>
             </Button>
             <DropdownMenu>
@@ -316,7 +316,7 @@ export function WidgetCard({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
                   <MoreHorizontal className="h-4 w-4" />
-                  <span className="sr-only">Widget options</span>
+                  <span className="sr-only">Chart options</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -335,7 +335,7 @@ export function WidgetCard({
 
       {/* Toolbar - shown when editing */}
       {editState.isEditing && (
-        <WidgetToolbar
+        <TimeSeriesToolbar
           chartType={editState.state.chartType}
           dateRange={editState.state.dateRange}
           splitBy={editState.state.splitBy}
@@ -363,7 +363,7 @@ export function WidgetCard({
       </CardContent>
 
       {/* Context bar - shown when editing */}
-      <WidgetContextBar
+      <TimeSeriesContextBar
         isDirty={editState.isDirty}
         isSaving={editState.isSaving}
         isEditing={editState.isEditing}

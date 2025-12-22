@@ -17,8 +17,8 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(next http.Han
 		r.Get("/", h.ListDashboards)
 		r.Get("/default", h.GetDefaultDashboard)
 		r.Get("/{id}", h.GetDashboard)
-		r.Get("/{id}/kpis", h.ListKPIs)
-		r.Get("/{id}/kpis/compute", h.ComputeKPIs)
+		r.Get("/{id}/scalar-metrics", h.ListScalarMetrics)
+		r.Get("/{id}/scalar-metrics/compute", h.ComputeScalarMetrics)
 
 		// Write operations (editor and admin only)
 		r.Group(func(r chi.Router) {
@@ -28,17 +28,17 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(next http.Han
 			r.Put("/{id}", h.UpdateDashboard)
 			r.Delete("/{id}", h.DeleteDashboard)
 
-			// Widget routes
-			r.Post("/{id}/widgets", h.CreateWidget)
-			r.Put("/{id}/widgets/{widgetId}", h.UpdateWidget)
-			r.Delete("/{id}/widgets/{widgetId}", h.DeleteWidget)
-			r.Put("/{id}/widgets/reorder", h.ReorderWidgets)
+			// Time Series routes
+			r.Post("/{id}/time-series", h.CreateTimeSeries)
+			r.Put("/{id}/time-series/{timeSeriesId}", h.UpdateTimeSeries)
+			r.Delete("/{id}/time-series/{timeSeriesId}", h.DeleteTimeSeries)
+			r.Put("/{id}/time-series/reorder", h.ReorderTimeSeries)
 
-			// KPI routes
-			r.Post("/{id}/kpis", h.CreateKPI)
-			r.Put("/{id}/kpis/{kpiId}", h.UpdateKPI)
-			r.Delete("/{id}/kpis/{kpiId}", h.DeleteKPI)
-			r.Put("/{id}/kpis/reorder", h.ReorderKPIs)
+			// Scalar Metric routes
+			r.Post("/{id}/scalar-metrics", h.CreateScalarMetric)
+			r.Put("/{id}/scalar-metrics/{scalarMetricId}", h.UpdateScalarMetric)
+			r.Delete("/{id}/scalar-metrics/{scalarMetricId}", h.DeleteScalarMetric)
+			r.Put("/{id}/scalar-metrics/reorder", h.ReorderScalarMetrics)
 		})
 	})
 }

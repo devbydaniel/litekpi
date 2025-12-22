@@ -9,16 +9,16 @@ import {
 } from '@/shared/components/ui/select'
 import { Badge } from '@/shared/components/ui/badge'
 import { ButtonGroup } from '@/shared/components/ui/button-group'
-import type { ChartType, DateRangeValue } from '../hooks/use-widget-edit'
-import type { WidgetMetadata } from '../hooks/use-widget-metadata'
+import type { ChartType, DateRangeValue } from '../hooks/use-time-series-edit'
+import type { TimeSeriesMetadata } from '../hooks/use-time-series-metadata'
 import type { Filter as FilterType } from '@/shared/api/generated/models'
 import { FilterPopover } from './filter-popover'
 
-interface WidgetToolbarProps {
+interface TimeSeriesToolbarProps {
   chartType: ChartType
   dateRange: DateRangeValue
   splitBy: string | undefined
-  metadata: WidgetMetadata
+  metadata: TimeSeriesMetadata
   filters: FilterType[]
   onChartTypeChange: (type: ChartType) => void
   onDateRangeChange: (range: DateRangeValue) => void
@@ -26,7 +26,7 @@ interface WidgetToolbarProps {
   onFilterChange: (key: string, value: string | undefined) => void
 }
 
-export function WidgetToolbar({
+export function TimeSeriesToolbar({
   chartType,
   dateRange,
   splitBy,
@@ -36,7 +36,7 @@ export function WidgetToolbar({
   onDateRangeChange,
   onSplitByChange,
   onFilterChange,
-}: WidgetToolbarProps) {
+}: TimeSeriesToolbarProps) {
   const metadataKeys = metadata.keys
   const activeFilterCount = filters.length
 

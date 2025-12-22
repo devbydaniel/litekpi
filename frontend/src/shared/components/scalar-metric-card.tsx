@@ -6,10 +6,10 @@ import {
   CardTitle,
 } from '@/shared/components/ui/card'
 import { cn } from '@/shared/lib/utils'
-import type { ComputedKPI } from '@/shared/api/generated/models'
+import type { ComputedScalarMetric } from '@/shared/api/generated/models'
 
-interface KpiCardProps {
-  kpi: ComputedKPI
+interface ScalarMetricCardProps {
+  metric: ComputedScalarMetric
   className?: string
 }
 
@@ -45,28 +45,28 @@ function formatChange(
   return `${sign}${formatValue(change)}`
 }
 
-export function KpiCard({ kpi, className }: KpiCardProps) {
-  const hasComparison = kpi.comparisonEnabled && kpi.change !== undefined
-  const isPositive = hasComparison && (kpi.change ?? 0) > 0
-  const isNegative = hasComparison && (kpi.change ?? 0) < 0
-  const isNeutral = hasComparison && kpi.change === 0
+export function ScalarMetricCard({ metric, className }: ScalarMetricCardProps) {
+  const hasComparison = metric.comparisonEnabled && metric.change !== undefined
+  const isPositive = hasComparison && (metric.change ?? 0) > 0
+  const isNegative = hasComparison && (metric.change ?? 0) < 0
+  const isNeutral = hasComparison && metric.change === 0
 
   const changeText = formatChange(
-    kpi.change,
-    kpi.changePercent,
-    kpi.comparisonDisplayType
+    metric.change,
+    metric.changePercent,
+    metric.comparisonDisplayType
   )
 
   return (
     <Card className={cn('relative', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm text-muted-foreground">
-          {kpi.label}
+          {metric.label}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-1">
-          <div className="text-2xl font-bold">{formatValue(kpi.value)}</div>
+          <div className="text-2xl font-bold">{formatValue(metric.value)}</div>
           {hasComparison && (
             <div
               className={cn(
@@ -84,7 +84,7 @@ export function KpiCard({ kpi, className }: KpiCardProps) {
             </div>
           )}
           <div className="text-xs text-muted-foreground">
-            {TIMEFRAME_LABELS[kpi.timeframe ?? ''] ?? kpi.timeframe}
+            {TIMEFRAME_LABELS[metric.timeframe ?? ''] ?? metric.timeframe}
           </div>
         </div>
       </CardContent>
@@ -92,11 +92,11 @@ export function KpiCard({ kpi, className }: KpiCardProps) {
   )
 }
 
-interface KpiCardSkeletonProps {
+interface ScalarMetricCardSkeletonProps {
   className?: string
 }
 
-export function KpiCardSkeleton({ className }: KpiCardSkeletonProps) {
+export function ScalarMetricCardSkeleton({ className }: ScalarMetricCardSkeletonProps) {
   return (
     <Card className={cn('relative', className)}>
       <CardHeader className="pb-2">

@@ -18,21 +18,21 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select'
 import { useGetDataSources, useGetDataSourcesDataSourceIdMeasurements } from '@/shared/api/generated/api'
-import type { CreateWidgetRequest } from '@/shared/api/generated/models'
+import type { CreateTimeSeriesRequest } from '@/shared/api/generated/models'
 
-interface AddWidgetDialogProps {
+interface AddTimeSeriesDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: (widget: CreateWidgetRequest) => Promise<void>
+  onAdd: (timeSeries: CreateTimeSeriesRequest) => Promise<void>
   isLoading: boolean
 }
 
-export function AddWidgetDialog({
+export function AddTimeSeriesDialog({
   open,
   onOpenChange,
   onAdd,
   isLoading,
-}: AddWidgetDialogProps) {
+}: AddTimeSeriesDialogProps) {
   const [dataSourceId, setDataSourceId] = useState<string>('')
   const [measurementName, setMeasurementName] = useState<string>('')
   const [title, setTitle] = useState<string>('')
@@ -82,10 +82,10 @@ export function AddWidgetDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Widget</DialogTitle>
+          <DialogTitle>Add Chart</DialogTitle>
           <DialogDescription>
             Select a measurement to display on your dashboard. You can configure
-            chart type, filters, and other options after adding the widget.
+            chart type, filters, and other options after adding the chart.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,7 +156,7 @@ export function AddWidgetDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !canSubmit}>
-              {isLoading ? 'Adding...' : 'Add Widget'}
+              {isLoading ? 'Adding...' : 'Add Chart'}
             </Button>
           </DialogFooter>
         </form>

@@ -1,19 +1,19 @@
 import { useMemo } from 'react'
 import { useGetDataSourcesDataSourceIdMeasurementsNameMetadata } from '@/shared/api/generated/api'
 
-export interface WidgetMetadata {
+export interface TimeSeriesMetadata {
   keys: string[]
   values: Record<string, string[]>
 }
 
-export function useWidgetMetadata(dataSourceId: string, measurementName: string) {
+export function useTimeSeriesMetadata(dataSourceId: string, measurementName: string) {
   const { data, isLoading } = useGetDataSourcesDataSourceIdMeasurementsNameMetadata(
     dataSourceId,
     measurementName,
     { query: { enabled: !!dataSourceId && !!measurementName } }
   )
 
-  const metadata = useMemo<WidgetMetadata>(() => {
+  const metadata = useMemo<TimeSeriesMetadata>(() => {
     const keys: string[] = []
     const values: Record<string, string[]> = {}
 

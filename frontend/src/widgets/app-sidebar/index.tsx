@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Database, FileText, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import { Database, LayoutDashboard, LogOut, Users } from 'lucide-react'
 import { useAuthStore } from '@/shared/stores/auth-store'
 import { postAuthLogout } from '@/shared/api/generated/api'
 import {
@@ -64,14 +64,6 @@ export function AppSidebar() {
                   <Link to="/">
                     <LayoutDashboard className="size-4" />
                     <span>Dashboard</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Reports">
-                  <Link to="/reports">
-                    <FileText className="size-4" />
-                    <span>Reports</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

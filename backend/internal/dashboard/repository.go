@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Repository handles database operations for dashboards and widgets.
+// Repository handles database operations for dashboards.
 type Repository struct {
 	pool *pgxpool.Pool
 }
@@ -20,8 +19,6 @@ type Repository struct {
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
-
-// Dashboard operations
 
 // CreateDashboard creates a new dashboard.
 func (r *Repository) CreateDashboard(ctx context.Context, orgID uuid.UUID, name string, isDefault bool) (*Dashboard, error) {
@@ -133,175 +130,4 @@ func (r *Repository) DeleteDashboard(ctx context.Context, id uuid.UUID) error {
 		id,
 	)
 	return err
-}
-
-// Widget operations
-
-// CreateWidget creates a new widget.
-func (r *Repository) CreateWidget(ctx context.Context, dashboardID, dataSourceID uuid.UUID, req CreateWidgetRequest, position int) (*Widget, error) {
-	filtersJSON, err := json.Marshal(req.Filters)
-	if err != nil {
-		return nil, err
-	}
-	if req.Filters == nil {
-		filtersJSON = []byte("[]")
-	}
-
-	widget := &Widget{
-		ID:              uuid.New(),
-		DashboardID:     dashboardID,
-		DataSourceID:    dataSourceID,
-		Title:           req.Title,
-		MeasurementName: req.MeasurementName,
-		ChartType:       req.ChartType,
-		DateRange:       req.DateRange,
-		DateFrom:        req.DateFrom,
-		DateTo:          req.DateTo,
-		SplitBy:         req.SplitBy,
-		Filters:         req.Filters,
-		Position:        position,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
-	}
-
-	if widget.Filters == nil {
-		widget.Filters = []Filter{}
-	}
-
-	_, err = r.pool.Exec(ctx,
-		`INSERT INTO widgets (id, dashboard_id, data_source_id, title, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		widget.ID, widget.DashboardID, widget.DataSourceID, widget.Title, widget.MeasurementName, widget.ChartType, widget.DateRange, widget.DateFrom, widget.DateTo, widget.SplitBy, filtersJSON, widget.Position, widget.CreatedAt, widget.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return widget, nil
-}
-
-// GetWidgetByID retrieves a widget by its ID.
-func (r *Repository) GetWidgetByID(ctx context.Context, id uuid.UUID) (*Widget, error) {
-	widget := &Widget{}
-	var filtersJSON []byte
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, dashboard_id, data_source_id, title, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at
-		FROM widgets WHERE id = $1`,
-		id,
-	).Scan(&widget.ID, &widget.DashboardID, &widget.DataSourceID, &widget.Title, &widget.MeasurementName, &widget.ChartType, &widget.DateRange, &widget.DateFrom, &widget.DateTo, &widget.SplitBy, &filtersJSON, &widget.Position, &widget.CreatedAt, &widget.UpdatedAt)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(filtersJSON, &widget.Filters); err != nil {
-		widget.Filters = []Filter{}
-	}
-
-	return widget, nil
-}
-
-// GetWidgetsByDashboardID retrieves all widgets for a dashboard.
-func (r *Repository) GetWidgetsByDashboardID(ctx context.Context, dashboardID uuid.UUID) ([]Widget, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, dashboard_id, data_source_id, title, measurement_name, chart_type, date_range, date_from, date_to, split_by, filters, position, created_at, updated_at
-		FROM widgets WHERE dashboard_id = $1
-		ORDER BY position ASC`,
-		dashboardID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var widgets []Widget
-	for rows.Next() {
-		var w Widget
-		var filtersJSON []byte
-		if err := rows.Scan(&w.ID, &w.DashboardID, &w.DataSourceID, &w.Title, &w.MeasurementName, &w.ChartType, &w.DateRange, &w.DateFrom, &w.DateTo, &w.SplitBy, &filtersJSON, &w.Position, &w.CreatedAt, &w.UpdatedAt); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(filtersJSON, &w.Filters); err != nil {
-			w.Filters = []Filter{}
-		}
-		widgets = append(widgets, w)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if widgets == nil {
-		widgets = []Widget{}
-	}
-
-	return widgets, nil
-}
-
-// UpdateWidget updates a widget's configuration.
-func (r *Repository) UpdateWidget(ctx context.Context, id uuid.UUID, req UpdateWidgetRequest) error {
-	filtersJSON, err := json.Marshal(req.Filters)
-	if err != nil {
-		return err
-	}
-	if req.Filters == nil {
-		filtersJSON = []byte("[]")
-	}
-
-	_, err = r.pool.Exec(ctx,
-		`UPDATE widgets SET title = $1, chart_type = $2, date_range = $3, date_from = $4, date_to = $5, split_by = $6, filters = $7, updated_at = NOW() WHERE id = $8`,
-		req.Title, req.ChartType, req.DateRange, req.DateFrom, req.DateTo, req.SplitBy, filtersJSON, id,
-	)
-	return err
-}
-
-// DeleteWidget deletes a widget by its ID.
-func (r *Repository) DeleteWidget(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx,
-		`DELETE FROM widgets WHERE id = $1`,
-		id,
-	)
-	return err
-}
-
-// GetMaxWidgetPosition gets the maximum position for widgets in a dashboard.
-func (r *Repository) GetMaxWidgetPosition(ctx context.Context, dashboardID uuid.UUID) (int, error) {
-	var maxPos *int
-	err := r.pool.QueryRow(ctx,
-		`SELECT MAX(position) FROM widgets WHERE dashboard_id = $1`,
-		dashboardID,
-	).Scan(&maxPos)
-
-	if err != nil {
-		return 0, err
-	}
-	if maxPos == nil {
-		return 0, nil
-	}
-
-	return *maxPos, nil
-}
-
-// UpdateWidgetPositions updates the positions of multiple widgets.
-func (r *Repository) UpdateWidgetPositions(ctx context.Context, dashboardID uuid.UUID, widgetIDs []uuid.UUID) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	for i, widgetID := range widgetIDs {
-		_, err := tx.Exec(ctx,
-			`UPDATE widgets SET position = $1, updated_at = NOW() WHERE id = $2 AND dashboard_id = $3`,
-			i, widgetID, dashboardID,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit(ctx)
 }

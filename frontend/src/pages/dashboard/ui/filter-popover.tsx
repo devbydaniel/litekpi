@@ -16,10 +16,10 @@ import {
 import { Button } from '@/shared/components/ui/button'
 import { Label } from '@/shared/components/ui/label'
 import type { Filter } from '@/shared/api/generated/models'
-import type { WidgetMetadata } from '../hooks/use-widget-metadata'
+import type { TimeSeriesMetadata } from '../hooks/use-time-series-metadata'
 
 interface FilterPopoverProps {
-  metadata: WidgetMetadata
+  metadata: TimeSeriesMetadata
   filters: Filter[]
   onFilterChange: (key: string, value: string | undefined) => void
   children: React.ReactNode

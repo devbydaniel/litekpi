@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import type { Widget, Filter, UpdateWidgetRequest } from '@/shared/api/generated/models'
+import type { TimeSeries, Filter, UpdateTimeSeriesRequest } from '@/shared/api/generated/models'
 
 export type ChartType = 'area' | 'bar' | 'line'
 export type DateRangeValue = 'last_24_hours' | 'last_7_days' | 'last_30_days'
 
-export interface WidgetEditState {
+export interface TimeSeriesEditState {
   title: string | undefined
   chartType: ChartType
   dateRange: DateRangeValue
@@ -12,22 +12,22 @@ export interface WidgetEditState {
   filters: Filter[]
 }
 
-interface UseWidgetEditOptions {
-  widget: Widget
-  onSave: (widgetId: string, update: UpdateWidgetRequest) => Promise<void>
+interface UseTimeSeriesEditOptions {
+  timeSeries: TimeSeries
+  onSave: (timeSeriesId: string, update: UpdateTimeSeriesRequest) => Promise<void>
 }
 
-function getInitialState(widget: Widget): WidgetEditState {
+function getInitialState(timeSeries: TimeSeries): TimeSeriesEditState {
   return {
-    title: widget.title ?? undefined,
-    chartType: (widget.chartType as ChartType) ?? 'area',
-    dateRange: (widget.dateRange as DateRangeValue) ?? 'last_7_days',
-    splitBy: widget.splitBy ?? undefined,
-    filters: widget.filters ?? [],
+    title: timeSeries.title ?? undefined,
+    chartType: (timeSeries.chartType as ChartType) ?? 'area',
+    dateRange: (timeSeries.dateRange as DateRangeValue) ?? 'last_7_days',
+    splitBy: timeSeries.splitBy ?? undefined,
+    filters: timeSeries.filters ?? [],
   }
 }
 
-function statesEqual(a: WidgetEditState, b: WidgetEditState): boolean {
+function statesEqual(a: TimeSeriesEditState, b: TimeSeriesEditState): boolean {
   if (a.title !== b.title) return false
   if (a.chartType !== b.chartType) return false
   if (a.dateRange !== b.dateRange) return false
@@ -46,17 +46,17 @@ function statesEqual(a: WidgetEditState, b: WidgetEditState): boolean {
   return true
 }
 
-export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
+export function useTimeSeriesEdit({ timeSeries, onSave }: UseTimeSeriesEditOptions) {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [state, setState] = useState<WidgetEditState>(() => getInitialState(widget))
+  const [state, setState] = useState<TimeSeriesEditState>(() => getInitialState(timeSeries))
 
-  // Reset state when widget changes (e.g., after save)
+  // Reset state when time series changes (e.g., after save)
   useEffect(() => {
-    setState(getInitialState(widget))
-  }, [widget])
+    setState(getInitialState(timeSeries))
+  }, [timeSeries])
 
-  const savedState = useMemo(() => getInitialState(widget), [widget])
+  const savedState = useMemo(() => getInitialState(timeSeries), [timeSeries])
   const isDirty = useMemo(() => !statesEqual(state, savedState), [state, savedState])
 
   const setTitle = useCallback((title: string | undefined) => {
@@ -90,15 +90,15 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
   }, [])
 
   const reset = useCallback(() => {
-    setState(getInitialState(widget))
-  }, [widget])
+    setState(getInitialState(timeSeries))
+  }, [timeSeries])
 
   const save = useCallback(async () => {
-    if (!isDirty || !widget.id) return
+    if (!isDirty || !timeSeries.id) return
 
     setIsSaving(true)
     try {
-      await onSave(widget.id, {
+      await onSave(timeSeries.id, {
         title: state.title,
         chartType: state.chartType,
         dateRange: state.dateRange,
@@ -108,7 +108,7 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
     } finally {
       setIsSaving(false)
     }
-  }, [isDirty, widget.id, state, onSave])
+  }, [isDirty, timeSeries.id, state, onSave])
 
   const toggleEditing = useCallback(() => {
     setIsEditing((prev) => !prev)
@@ -118,17 +118,17 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
     setIsEditing(false)
   }, [])
 
-  // Build a widget-like object with current edits for preview
-  const previewWidget = useMemo(
-    (): Widget => ({
-      ...widget,
+  // Build a time series-like object with current edits for preview
+  const previewTimeSeries = useMemo(
+    (): TimeSeries => ({
+      ...timeSeries,
       title: state.title,
       chartType: state.chartType,
       dateRange: state.dateRange,
       splitBy: state.splitBy,
       filters: state.filters,
     }),
-    [widget, state]
+    [timeSeries, state]
   )
 
   return {
@@ -137,7 +137,7 @@ export function useWidgetEdit({ widget, onSave }: UseWidgetEditOptions) {
     isSaving,
     isDirty,
     state,
-    previewWidget,
+    previewTimeSeries,
 
     // Setters
     setTitle,

@@ -5,14 +5,14 @@ import {
   useGetDashboardsDefault,
   useGetDashboardsId,
   usePostDashboards,
-  usePostDashboardsIdWidgets,
-  useDeleteDashboardsIdWidgetsWidgetId,
-  usePutDashboardsIdWidgetsWidgetId,
+  usePostDashboardsIdTimeSeries,
+  useDeleteDashboardsIdTimeSeriesTimeSeriesId,
+  usePutDashboardsIdTimeSeriesTimeSeriesId,
   getGetDashboardsDefaultQueryKey,
   getGetDashboardsIdQueryKey,
   getGetDashboardsQueryKey,
 } from '@/shared/api/generated/api'
-import type { CreateWidgetRequest, UpdateWidgetRequest } from '@/shared/api/generated/models'
+import type { CreateTimeSeriesRequest, UpdateTimeSeriesRequest } from '@/shared/api/generated/models'
 
 export function useDashboard(dashboardId?: string) {
   const queryClient = useQueryClient()
@@ -46,8 +46,8 @@ export function useDashboard(dashboardId?: string) {
     },
   })
 
-  // Create widget mutation
-  const createWidgetMutation = usePostDashboardsIdWidgets({
+  // Create time series mutation
+  const createTimeSeriesMutation = usePostDashboardsIdTimeSeries({
     mutation: {
       onSuccess: () => {
         if (dashboardId) {
@@ -55,16 +55,16 @@ export function useDashboard(dashboardId?: string) {
         } else {
           queryClient.invalidateQueries({ queryKey: getGetDashboardsDefaultQueryKey() })
         }
-        toast.success('Widget added')
+        toast.success('Chart added')
       },
       onError: () => {
-        toast.error('Failed to add widget')
+        toast.error('Failed to add chart')
       },
     },
   })
 
-  // Update widget mutation
-  const updateWidgetMutation = usePutDashboardsIdWidgetsWidgetId({
+  // Update time series mutation
+  const updateTimeSeriesMutation = usePutDashboardsIdTimeSeriesTimeSeriesId({
     mutation: {
       onSuccess: () => {
         if (dashboardId) {
@@ -72,16 +72,16 @@ export function useDashboard(dashboardId?: string) {
         } else {
           queryClient.invalidateQueries({ queryKey: getGetDashboardsDefaultQueryKey() })
         }
-        toast.success('Widget updated')
+        toast.success('Chart updated')
       },
       onError: () => {
-        toast.error('Failed to update widget')
+        toast.error('Failed to update chart')
       },
     },
   })
 
-  // Delete widget mutation
-  const deleteWidgetMutation = useDeleteDashboardsIdWidgetsWidgetId({
+  // Delete time series mutation
+  const deleteTimeSeriesMutation = useDeleteDashboardsIdTimeSeriesTimeSeriesId({
     mutation: {
       onSuccess: () => {
         if (dashboardId) {
@@ -89,10 +89,10 @@ export function useDashboard(dashboardId?: string) {
         } else {
           queryClient.invalidateQueries({ queryKey: getGetDashboardsDefaultQueryKey() })
         }
-        toast.success('Widget removed')
+        toast.success('Chart removed')
       },
       onError: () => {
-        toast.error('Failed to remove widget')
+        toast.error('Failed to remove chart')
       },
     },
   })
@@ -101,35 +101,36 @@ export function useDashboard(dashboardId?: string) {
     await createDashboardMutation.mutateAsync({ data: { name } })
   }
 
-  const addWidget = async (widget: CreateWidgetRequest) => {
+  const addTimeSeries = async (timeSeries: CreateTimeSeriesRequest) => {
     const id = dashboardData?.dashboard?.id
     if (!id) return
-    await createWidgetMutation.mutateAsync({ id, data: widget })
+    await createTimeSeriesMutation.mutateAsync({ id, data: timeSeries })
   }
 
-  const updateWidget = async (widgetId: string, widget: UpdateWidgetRequest) => {
+  const updateTimeSeries = async (timeSeriesId: string, timeSeries: UpdateTimeSeriesRequest) => {
     const id = dashboardData?.dashboard?.id
     if (!id) return
-    await updateWidgetMutation.mutateAsync({ id, widgetId, data: widget })
+    await updateTimeSeriesMutation.mutateAsync({ id, timeSeriesId, data: timeSeries })
   }
 
-  const deleteWidget = async (widgetId: string) => {
+  const deleteTimeSeries = async (timeSeriesId: string) => {
     const id = dashboardData?.dashboard?.id
     if (!id) return
-    await deleteWidgetMutation.mutateAsync({ id, widgetId })
+    await deleteTimeSeriesMutation.mutateAsync({ id, timeSeriesId })
   }
 
   return {
     dashboards: dashboardsData?.dashboards ?? [],
     dashboard: dashboardData?.dashboard,
-    widgets: dashboardData?.widgets ?? [],
+    timeSeries: dashboardData?.timeSeries ?? [],
+    scalarMetrics: dashboardData?.scalarMetrics ?? [],
     isLoading,
     createDashboard,
-    addWidget,
-    updateWidget,
-    deleteWidget,
-    isAddingWidget: createWidgetMutation.isPending,
-    isUpdatingWidget: updateWidgetMutation.isPending,
-    isDeletingWidget: deleteWidgetMutation.isPending,
+    addTimeSeries,
+    updateTimeSeries,
+    deleteTimeSeries,
+    isAddingTimeSeries: createTimeSeriesMutation.isPending,
+    isUpdatingTimeSeries: updateTimeSeriesMutation.isPending,
+    isDeletingTimeSeries: deleteTimeSeriesMutation.isPending,
   }
 }

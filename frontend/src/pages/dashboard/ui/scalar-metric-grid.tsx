@@ -13,71 +13,71 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog'
-import { KpiCard, KpiCardSkeleton } from '@/shared/components/kpi-card'
-import { KpiForm } from '@/shared/components/kpi-form'
-import type { ComputedKPI, Kpi, UpdateKPIRequest } from '@/shared/api/generated/models'
+import { ScalarMetricCard, ScalarMetricCardSkeleton } from '@/shared/components/scalar-metric-card'
+import { ScalarMetricForm } from '@/shared/components/scalar-metric-form'
+import type { ComputedScalarMetric, ScalarMetric, UpdateScalarMetricRequest } from '@/shared/api/generated/models'
 
-interface KpiGridProps {
-  kpis: Kpi[]
-  computedKpis: ComputedKPI[]
+interface ScalarMetricGridProps {
+  metrics: ScalarMetric[]
+  computedMetrics: ComputedScalarMetric[]
   isLoading: boolean
   canEdit: boolean
-  onUpdate: (kpiId: string, kpi: UpdateKPIRequest) => Promise<void>
-  onDelete: (kpiId: string) => Promise<void>
+  onUpdate: (metricId: string, metric: UpdateScalarMetricRequest) => Promise<void>
+  onDelete: (metricId: string) => Promise<void>
   isUpdating: boolean
 }
 
-export function KpiGrid({
-  kpis,
-  computedKpis,
+export function ScalarMetricGrid({
+  metrics,
+  computedMetrics,
   isLoading,
   canEdit,
   onUpdate,
   onDelete,
   isUpdating,
-}: KpiGridProps) {
-  const [editingKpi, setEditingKpi] = useState<Kpi | null>(null)
+}: ScalarMetricGridProps) {
+  const [editingMetric, setEditingMetric] = useState<ScalarMetric | null>(null)
 
   if (isLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <KpiCardSkeleton key={i} />
+          <ScalarMetricCardSkeleton key={i} />
         ))}
       </div>
     )
   }
 
-  if (computedKpis.length === 0) {
+  if (computedMetrics.length === 0) {
     return null
   }
 
-  const handleEdit = async (values: UpdateKPIRequest) => {
-    if (!editingKpi?.id) return
-    await onUpdate(editingKpi.id, values)
-    setEditingKpi(null)
+  const handleEdit = async (values: UpdateScalarMetricRequest) => {
+    if (!editingMetric?.id) return
+    await onUpdate(editingMetric.id, values)
+    setEditingMetric(null)
   }
 
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {computedKpis.map((kpi) => (
-          <div key={kpi.id} className="group relative">
-            <KpiCard kpi={kpi} />
+        {computedMetrics.map((metric) => (
+          <div key={metric.id} className="group relative">
+            <ScalarMetricCard metric={metric} />
             {canEdit && (
               <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
                       <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">KPI options</span>
+                      <span className="sr-only">Metric options</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
                       onClick={() => {
-                        const originalKpi = kpis.find((k) => k.id === kpi.id)
-                        if (originalKpi) setEditingKpi(originalKpi)
+                        const originalMetric = metrics.find((m) => m.id === metric.id)
+                        if (originalMetric) setEditingMetric(originalMetric)
                       }}
                     >
                       <Pencil className="mr-2 h-4 w-4" />
@@ -85,7 +85,7 @@ export function KpiGrid({
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onClick={() => kpi.id && onDelete(kpi.id)}
+                      onClick={() => metric.id && onDelete(metric.id)}
                     >
                       <Trash className="mr-2 h-4 w-4" />
                       Remove
@@ -98,16 +98,16 @@ export function KpiGrid({
         ))}
       </div>
 
-      <Dialog open={!!editingKpi} onOpenChange={(open) => !open && setEditingKpi(null)}>
+      <Dialog open={!!editingMetric} onOpenChange={(open) => !open && setEditingMetric(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit KPI</DialogTitle>
+            <DialogTitle>Edit Metric</DialogTitle>
           </DialogHeader>
-          {editingKpi && (
-            <KpiForm
-              initialValues={editingKpi}
+          {editingMetric && (
+            <ScalarMetricForm
+              initialValues={editingMetric}
               onSubmit={handleEdit}
-              onCancel={() => setEditingKpi(null)}
+              onCancel={() => setEditingMetric(null)}
               isLoading={isUpdating}
               submitLabel="Save Changes"
             />

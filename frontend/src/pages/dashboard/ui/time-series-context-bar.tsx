@@ -1,19 +1,19 @@
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 
-interface WidgetContextBarProps {
+interface TimeSeriesContextBarProps {
   isDirty: boolean
   isSaving: boolean
   isEditing: boolean
   onSave: () => void
 }
 
-export function WidgetContextBar({
+export function TimeSeriesContextBar({
   isDirty,
   isSaving,
   isEditing,
   onSave,
-}: WidgetContextBarProps) {
+}: TimeSeriesContextBarProps) {
   if (!isEditing) return null
 
   return (
