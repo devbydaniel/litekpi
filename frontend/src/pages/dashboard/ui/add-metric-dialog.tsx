@@ -5,38 +5,38 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/shared/components/ui/dialog'
-import { ScalarMetricForm } from '@/shared/components/scalar-metric-form'
-import type { CreateScalarMetricRequest } from '@/shared/api/generated/models'
+import { MetricForm } from '@/widgets/metric-form'
+import type { CreateMetricRequest } from '@/shared/api/generated/models'
 
-interface AddScalarMetricDialogProps {
+interface AddMetricDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: (metric: CreateScalarMetricRequest) => Promise<void>
+  onAdd: (metric: CreateMetricRequest) => Promise<void>
   isLoading: boolean
 }
 
-export function AddScalarMetricDialog({
+export function AddMetricDialog({
   open,
   onOpenChange,
   onAdd,
   isLoading,
-}: AddScalarMetricDialogProps) {
-  const handleSubmit = async (values: CreateScalarMetricRequest) => {
+}: AddMetricDialogProps) {
+  const handleSubmit = async (values: CreateMetricRequest) => {
     await onAdd(values)
     onOpenChange(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Metric</DialogTitle>
           <DialogDescription>
-            Create a metric card to display a single aggregated value.
+            Create a metric to display data as a single value or a chart over time.
           </DialogDescription>
         </DialogHeader>
 
-        <ScalarMetricForm
+        <MetricForm
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
           isLoading={isLoading}

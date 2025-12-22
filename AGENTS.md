@@ -21,11 +21,12 @@ Organized by **bounded context** (not by layer):
 backend/
 ├── cmd/server/main.go          # Entry point
 ├── internal/
-│   ├── auth/                   # Authentication context
-│   ├── product/                # Product & API keys
-│   ├── ingest/                 # Data ingestion API
+│   ├── auth/                   # Authentication & products
 │   ├── dashboard/              # Dashboards & widgets
-│   ├── report/                 # Scheduled reports
+│   ├── datasource/             # External data sources
+│   ├── demo/                   # Demo data generation
+│   ├── ingest/                 # Data ingestion API
+│   ├── metric/                 # Unified metrics
 │   └── platform/               # Shared infrastructure
 │       ├── config/
 │       ├── database/
@@ -36,6 +37,8 @@ backend/
 ```
 
 Each bounded context contains: `domain.go`, `repository.go`, `service.go`, `handler.go`
+
+**Cross-package imports:** Only import services from other packages, never repositories.
 
 ### Libraries
 

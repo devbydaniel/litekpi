@@ -6,24 +6,17 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-
-	"github.com/devbydaniel/litekpi/internal/scalarmetric"
-	"github.com/devbydaniel/litekpi/internal/timeseries"
 )
 
 // Service handles dashboard business logic.
 type Service struct {
-	repo                *Repository
-	timeSeriesService   *timeseries.Service
-	scalarMetricService *scalarmetric.Service
+	repo *Repository
 }
 
 // NewService creates a new dashboard service.
-func NewService(repo *Repository, timeSeriesService *timeseries.Service, scalarMetricService *scalarmetric.Service) *Service {
+func NewService(repo *Repository) *Service {
 	return &Service{
-		repo:                repo,
-		timeSeriesService:   timeSeriesService,
-		scalarMetricService: scalarMetricService,
+		repo: repo,
 	}
 }
 
@@ -52,7 +45,8 @@ func (s *Service) ListDashboards(ctx context.Context, orgID uuid.UUID) ([]Dashbo
 	return dashboards, nil
 }
 
-// GetDashboard returns a dashboard with its time series and scalar metrics after verifying organization ownership.
+// GetDashboard returns a dashboard after verifying organization ownership.
+// Metrics are fetched separately via /metrics endpoints.
 func (s *Service) GetDashboard(ctx context.Context, orgID, dashboardID uuid.UUID) (*DashboardWithData, error) {
 	dashboard, err := s.repo.GetDashboardByID(ctx, dashboardID)
 	if err != nil {
@@ -65,20 +59,8 @@ func (s *Service) GetDashboard(ctx context.Context, orgID, dashboardID uuid.UUID
 		return nil, ErrUnauthorized
 	}
 
-	ts, err := s.timeSeriesService.GetByDashboardID(ctx, dashboardID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get time series: %w", err)
-	}
-
-	sm, err := s.scalarMetricService.GetByDashboardID(ctx, dashboardID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get scalar metrics: %w", err)
-	}
-
 	return &DashboardWithData{
-		Dashboard:     *dashboard,
-		TimeSeries:    ts,
-		ScalarMetrics: sm,
+		Dashboard: *dashboard,
 	}, nil
 }
 
@@ -96,20 +78,8 @@ func (s *Service) GetDefaultDashboard(ctx context.Context, orgID uuid.UUID) (*Da
 		}
 	}
 
-	ts, err := s.timeSeriesService.GetByDashboardID(ctx, dashboard.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get time series: %w", err)
-	}
-
-	sm, err := s.scalarMetricService.GetByDashboardID(ctx, dashboard.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get scalar metrics: %w", err)
-	}
-
 	return &DashboardWithData{
-		Dashboard:     *dashboard,
-		TimeSeries:    ts,
-		ScalarMetrics: sm,
+		Dashboard: *dashboard,
 	}, nil
 }
 
@@ -163,7 +133,7 @@ func (s *Service) DeleteDashboard(ctx context.Context, orgID, dashboardID uuid.U
 }
 
 // VerifyDashboardOwnership verifies that a dashboard belongs to an organization.
-// This is used by handlers to check ownership before delegating to time series or scalar metric services.
+// This is used by handlers to check ownership before delegating to metric services.
 func (s *Service) VerifyDashboardOwnership(ctx context.Context, orgID, dashboardID uuid.UUID) (*Dashboard, error) {
 	dashboard, err := s.repo.GetDashboardByID(ctx, dashboardID)
 	if err != nil {

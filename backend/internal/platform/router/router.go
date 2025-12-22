@@ -15,11 +15,10 @@ import (
 	"github.com/devbydaniel/litekpi/internal/datasource"
 	"github.com/devbydaniel/litekpi/internal/demo"
 	"github.com/devbydaniel/litekpi/internal/ingest"
+	"github.com/devbydaniel/litekpi/internal/metric"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
 	"github.com/devbydaniel/litekpi/internal/platform/email"
-	"github.com/devbydaniel/litekpi/internal/scalarmetric"
-	"github.com/devbydaniel/litekpi/internal/timeseries"
 
 	_ "github.com/devbydaniel/litekpi/docs" // Swagger docs
 )
@@ -69,18 +68,15 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	ingestService := ingest.NewService(ingestRepo)
 	ingestHandler := ingest.NewHandler(ingestService, dsService)
 
-	// Initialize time series module
-	tsRepo := timeseries.NewRepository(db.Pool)
-	tsService := timeseries.NewService(tsRepo, dsService)
-
-	// Initialize scalar metric module
-	smRepo := scalarmetric.NewRepository(db.Pool)
-	smService := scalarmetric.NewService(smRepo, ingestService, dsService)
-
 	// Initialize dashboard module
 	dashboardRepo := dashboard.NewRepository(db.Pool)
-	dashboardService := dashboard.NewService(dashboardRepo, tsService, smService)
-	dashboardHandler := dashboard.NewHandler(dashboardService, tsService, smService)
+	dashboardService := dashboard.NewService(dashboardRepo)
+	dashboardHandler := dashboard.NewHandler(dashboardService)
+
+	// Initialize metric module (unified metrics)
+	metricRepo := metric.NewRepository(db.Pool)
+	metricService := metric.NewService(metricRepo, dsService)
+	metricHandler := metric.NewHandler(metricService, dashboardService)
 
 	// Initialize demo module
 	demoService := demo.NewService(dsService, ingestService)
@@ -112,6 +108,9 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 		// Register dashboard routes
 		dashboardHandler.RegisterRoutes(r, authService.Middleware)
+
+		// Register metric routes (unified metrics)
+		registerMetricRoutes(r, authService.Middleware, metricHandler)
 
 		// Register demo routes
 		demoHandler.RegisterRoutes(r, authService.Middleware)
@@ -155,4 +154,25 @@ func respondJSON(w http.ResponseWriter, status int, data any) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// registerMetricRoutes registers the unified metric routes.
+func registerMetricRoutes(r chi.Router, authMiddleware func(next http.Handler) http.Handler, h *metric.Handler) {
+	r.Route("/dashboards/{id}/metrics", func(r chi.Router) {
+		r.Use(authMiddleware)
+
+		// Read operations
+		r.Get("/", h.ListMetrics)
+		r.Get("/compute", h.ComputeMetrics)
+
+		// Write operations (editor and admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.EditorMiddleware)
+
+			r.Post("/", h.CreateMetric)
+			r.Put("/{metricId}", h.UpdateMetric)
+			r.Delete("/{metricId}", h.DeleteMetric)
+			r.Put("/reorder", h.ReorderMetrics)
+		})
+	})
 }

@@ -5,9 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/devbydaniel/litekpi/internal/scalarmetric"
-	"github.com/devbydaniel/litekpi/internal/timeseries"
 )
 
 // Error definitions
@@ -40,11 +37,9 @@ type UpdateDashboardRequest struct {
 	Name string `json:"name"`
 }
 
-// DashboardWithData is a dashboard with its time series and scalar metrics.
+// DashboardWithData is a dashboard (metrics are fetched separately via /metrics endpoints).
 type DashboardWithData struct {
-	Dashboard     Dashboard                `json:"dashboard"`
-	TimeSeries    []timeseries.TimeSeries  `json:"timeSeries"`
-	ScalarMetrics []scalarmetric.ScalarMetric `json:"scalarMetrics"`
+	Dashboard Dashboard `json:"dashboard"`
 }
 
 // ListDashboardsResponse is the response for listing dashboards.
