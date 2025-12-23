@@ -85,7 +85,7 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 	// Initialize MCP module
 	mcpRepo := mcp.NewRepository(db.Pool)
-	mcpService := mcp.NewService(mcpRepo)
+	mcpService := mcp.NewService(mcpRepo, dsService)
 	mcpHandler := mcp.NewHandler(mcpService)
 	mcpServerFactory := mcp.NewServerFactory(dsService, ingestService)
 

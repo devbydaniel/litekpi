@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/devbydaniel/litekpi/internal/datasource"
@@ -26,8 +25,8 @@ func NewServerFactory(dsService *datasource.Service, ingestService *ingest.Servi
 }
 
 // CreateServer creates a new MCP server configured with tools and resources.
-// The getOrgID function is called to get the organization ID from context.
-func (f *ServerFactory) CreateServer(getOrgID func(ctx context.Context) uuid.UUID) *mcp.Server {
+// The getMCPKey function is called to get the MCP API key from context.
+func (f *ServerFactory) CreateServer(getMCPKey func(ctx context.Context) *MCPAPIKey) *mcp.Server {
 	server := mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "litekpi",
@@ -37,10 +36,10 @@ func (f *ServerFactory) CreateServer(getOrgID func(ctx context.Context) uuid.UUI
 	)
 
 	// Register tools
-	f.toolRegistry.RegisterTools(server, getOrgID)
+	f.toolRegistry.RegisterTools(server, getMCPKey)
 
 	// Register resources
-	f.resourceRegistry.RegisterResources(server, getOrgID)
+	f.resourceRegistry.RegisterResources(server, getMCPKey)
 
 	return server
 }
@@ -50,9 +49,9 @@ func (f *ServerFactory) CreateServer(getOrgID func(ctx context.Context) uuid.UUI
 func (f *ServerFactory) MCPHTTPHandler() http.Handler {
 	return mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server {
-			// Create a server for this request with org context from middleware
-			return f.CreateServer(func(ctx context.Context) uuid.UUID {
-				return OrgIDFromContext(r.Context())
+			// Create a server for this request with MCP key context from middleware
+			return f.CreateServer(func(ctx context.Context) *MCPAPIKey {
+				return MCPKeyFromContext(r.Context())
 			})
 		},
 		nil,

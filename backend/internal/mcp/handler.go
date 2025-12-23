@@ -25,14 +25,14 @@ func NewHandler(service *Service) *Handler {
 // CreateKey handles creating a new MCP API key.
 //
 //	@Summary		Create MCP API key
-//	@Description	Create a new MCP API key for the organization (shown only once). Requires admin role.
+//	@Description	Create a new MCP API key with specified data source access (shown only once). Requires admin role.
 //	@Tags			mcp
 //	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			request	body		CreateKeyRequest	true	"Key data"
+//	@Param			request	body		CreateKeyRequest	true	"Key data with dataSourceIds"
 //	@Success		201		{object}	CreateKeyResponse
-//	@Failure		400		{object}	ErrorResponse
+//	@Failure		400		{object}	ErrorResponse	"Invalid request or no data sources selected"
 //	@Failure		401		{object}	ErrorResponse
 //	@Failure		403		{object}	ErrorResponse
 //	@Failure		500		{object}	ErrorResponse
@@ -52,12 +52,17 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.service.CreateKey(r.Context(), user.OrganizationID, user.ID, req)
 	if err != nil {
-		if errors.Is(err, ErrKeyNameEmpty) {
+		switch {
+		case errors.Is(err, ErrKeyNameEmpty):
 			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "API key name is required"})
-			return
+		case errors.Is(err, ErrNoDataSourcesSelected):
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "at least one data source must be selected"})
+		case errors.Is(err, ErrInvalidDataSource):
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid or unauthorized data source"})
+		default:
+			log.Printf("create MCP API key error: %v", err)
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "failed to create MCP API key"})
 		}
-		log.Printf("create MCP API key error: %v", err)
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "failed to create MCP API key"})
 		return
 	}
 
@@ -136,6 +141,63 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, MessageResponse{Message: "MCP API key deleted"})
+}
+
+// UpdateKey handles updating an MCP API key's data sources.
+//
+//	@Summary		Update MCP API key
+//	@Description	Update the data sources for an MCP API key. Requires admin role.
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Key ID"
+//	@Param			request	body		UpdateKeyRequest	true	"Updated data sources"
+//	@Success		200		{object}	MCPAPIKey
+//	@Failure		400		{object}	ErrorResponse	"Invalid request or no data sources selected"
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		403		{object}	ErrorResponse
+//	@Failure		404		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/mcp/keys/{id} [put]
+func (h *Handler) UpdateKey(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		respondJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+		return
+	}
+
+	keyID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid key ID"})
+		return
+	}
+
+	var req UpdateKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
+		return
+	}
+
+	key, err := h.service.UpdateKey(r.Context(), user.OrganizationID, keyID, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrKeyNotFound):
+			respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "MCP API key not found"})
+		case errors.Is(err, ErrUnauthorized):
+			respondJSON(w, http.StatusForbidden, ErrorResponse{Error: "unauthorized"})
+		case errors.Is(err, ErrNoDataSourcesSelected):
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "at least one data source must be selected"})
+		case errors.Is(err, ErrInvalidDataSource):
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid or unauthorized data source"})
+		default:
+			log.Printf("update MCP API key error: %v", err)
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "failed to update MCP API key"})
+		}
+		return
+	}
+
+	respondJSON(w, http.StatusOK, key)
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {

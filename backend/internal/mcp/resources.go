@@ -37,7 +37,7 @@ func NewResourceRegistry(dsService *datasource.Service, ingestService *ingest.Se
 }
 
 // RegisterResources registers all MCP resources with the server.
-func (r *ResourceRegistry) RegisterResources(server *mcp.Server, getOrgID func(ctx context.Context) uuid.UUID) {
+func (r *ResourceRegistry) RegisterResources(server *mcp.Server, getMCPKey func(ctx context.Context) *MCPAPIKey) {
 	// Resource template: litekpi://measurements/{dataSourceId}/{measurementName}?timeframe={timeframe}
 	server.AddResourceTemplate(
 		&mcp.ResourceTemplate{
@@ -47,9 +47,9 @@ func (r *ResourceRegistry) RegisterResources(server *mcp.Server, getOrgID func(c
 			MIMEType:    "application/json",
 		},
 		func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-			orgID := getOrgID(ctx)
-			if orgID == uuid.Nil {
-				return nil, fmt.Errorf("unauthorized: no organization context")
+			mcpKey := getMCPKey(ctx)
+			if mcpKey == nil {
+				return nil, fmt.Errorf("unauthorized: no API key context")
 			}
 
 			// Parse URI: litekpi://measurements/{dataSourceId}/{measurementName}?timeframe=...
@@ -72,8 +72,13 @@ func (r *ResourceRegistry) RegisterResources(server *mcp.Server, getOrgID func(c
 				return nil, fmt.Errorf("invalid dataSourceId: %w", err)
 			}
 
+			// Check if this key has access to this data source
+			if !hasAccess(mcpKey, dataSourceID) {
+				return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			}
+
 			// Verify data source belongs to organization
-			ds, err := r.dsService.GetDataSource(ctx, orgID, dataSourceID)
+			ds, err := r.dsService.GetDataSource(ctx, mcpKey.OrganizationID, dataSourceID)
 			if err != nil {
 				return nil, mcp.ResourceNotFoundError(req.Params.URI)
 			}

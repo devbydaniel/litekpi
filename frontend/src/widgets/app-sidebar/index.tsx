@@ -1,5 +1,11 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Database, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import {
+  Database,
+  Link as LinkIcon,
+  LayoutDashboard,
+  LogOut,
+  Users,
+} from 'lucide-react'
 import { useAuthStore } from '@/shared/stores/auth-store'
 import { postAuthLogout } from '@/shared/api/generated/api'
 import {
@@ -40,7 +46,14 @@ export function AppSidebar() {
             viewBox="0 0 32 32"
             className="size-5 text-primary"
           >
-            <rect x="4" y="20" width="6" height="8" rx="1" fill="currentColor" />
+            <rect
+              x="4"
+              y="20"
+              width="6"
+              height="8"
+              rx="1"
+              fill="currentColor"
+            />
             <rect
               x="13"
               y="12"
@@ -49,7 +62,14 @@ export function AppSidebar() {
               rx="1"
               fill="currentColor"
             />
-            <rect x="22" y="4" width="6" height="24" rx="1" fill="currentColor" />
+            <rect
+              x="22"
+              y="4"
+              width="6"
+              height="24"
+              rx="1"
+              fill="currentColor"
+            />
           </svg>
           <span className="font-heading">LiteKPI</span>
         </Link>
@@ -76,14 +96,24 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {user?.role === 'admin' && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Users">
-                    <Link to="/users">
-                      <Users className="size-4" />
-                      <span>Users</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Users">
+                      <Link to="/users">
+                        <Users className="size-4" />
+                        <span>Users</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="MCP API Keys">
+                      <Link to="/mcp-api-keys">
+                        <LinkIcon className="size-4" />
+                        <span>MCP</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
               )}
             </SidebarMenu>
           </SidebarGroupContent>

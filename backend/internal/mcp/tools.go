@@ -53,30 +53,31 @@ func NewToolRegistry(dsService *datasource.Service, ingestService *ingest.Servic
 }
 
 // RegisterTools registers all MCP tools with the server.
-func (t *ToolRegistry) RegisterTools(server *mcp.Server, getOrgID func(ctx context.Context) uuid.UUID) {
+func (t *ToolRegistry) RegisterTools(server *mcp.Server, getMCPKey func(ctx context.Context) *MCPAPIKey) {
 	// Tool: list_data_sources
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_data_sources",
-		Description: "List all data sources for the organization",
+		Description: "List all data sources accessible by this API key",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, ListDataSourcesOutput, error) {
-		orgID := getOrgID(ctx)
-		if orgID == uuid.Nil {
-			return nil, ListDataSourcesOutput{}, fmt.Errorf("unauthorized: no organization context")
+		mcpKey := getMCPKey(ctx)
+		if mcpKey == nil {
+			return nil, ListDataSourcesOutput{}, fmt.Errorf("unauthorized: no API key context")
 		}
 
-		dataSources, err := t.dsService.ListDataSources(ctx, orgID)
-		if err != nil {
-			return nil, ListDataSourcesOutput{}, fmt.Errorf("failed to list data sources: %w", err)
-		}
-
+		// Return only allowed data sources for this key
 		output := ListDataSourcesOutput{
-			DataSources: make([]DataSourceOutput, len(dataSources)),
+			DataSources: make([]DataSourceOutput, 0, len(mcpKey.AllowedDataSourceIDs)),
 		}
-		for i, ds := range dataSources {
-			output.DataSources[i] = DataSourceOutput{
+
+		for _, dsID := range mcpKey.AllowedDataSourceIDs {
+			ds, err := t.dsService.GetDataSource(ctx, mcpKey.OrganizationID, dsID)
+			if err != nil {
+				continue // Skip if data source no longer exists
+			}
+			output.DataSources = append(output.DataSources, DataSourceOutput{
 				ID:   ds.ID.String(),
 				Name: ds.Name,
-			}
+			})
 		}
 
 		return nil, output, nil
@@ -87,9 +88,9 @@ func (t *ToolRegistry) RegisterTools(server *mcp.Server, getOrgID func(ctx conte
 		Name:        "list_measurements",
 		Description: "List available measurement names and their metadata keys for a data source",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListMeasurementsInput) (*mcp.CallToolResult, ListMeasurementsOutput, error) {
-		orgID := getOrgID(ctx)
-		if orgID == uuid.Nil {
-			return nil, ListMeasurementsOutput{}, fmt.Errorf("unauthorized: no organization context")
+		mcpKey := getMCPKey(ctx)
+		if mcpKey == nil {
+			return nil, ListMeasurementsOutput{}, fmt.Errorf("unauthorized: no API key context")
 		}
 
 		dsID, err := uuid.Parse(input.DataSourceID)
@@ -97,8 +98,13 @@ func (t *ToolRegistry) RegisterTools(server *mcp.Server, getOrgID func(ctx conte
 			return nil, ListMeasurementsOutput{}, fmt.Errorf("invalid dataSourceId: %w", err)
 		}
 
+		// Check if this key has access to this data source
+		if !hasAccess(mcpKey, dsID) {
+			return nil, ListMeasurementsOutput{}, fmt.Errorf("unauthorized: API key does not have access to this data source")
+		}
+
 		// Verify data source belongs to organization
-		ds, err := t.dsService.GetDataSource(ctx, orgID, dsID)
+		ds, err := t.dsService.GetDataSource(ctx, mcpKey.OrganizationID, dsID)
 		if err != nil {
 			return nil, ListMeasurementsOutput{}, fmt.Errorf("data source not found or unauthorized: %w", err)
 		}
@@ -120,4 +126,14 @@ func (t *ToolRegistry) RegisterTools(server *mcp.Server, getOrgID func(ctx conte
 
 		return nil, output, nil
 	})
+}
+
+// hasAccess checks if the MCP API key has access to the given data source.
+func hasAccess(key *MCPAPIKey, dsID uuid.UUID) bool {
+	for _, allowedID := range key.AllowedDataSourceIDs {
+		if allowedID == dsID {
+			return true
+		}
+	}
+	return false
 }

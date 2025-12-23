@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/devbydaniel/litekpi/internal/datasource"
 )
 
 const (
@@ -19,12 +21,13 @@ const (
 
 // Service handles MCP API key business logic.
 type Service struct {
-	repo *Repository
+	repo      *Repository
+	dsService *datasource.Service
 }
 
 // NewService creates a new MCP service.
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, dsService *datasource.Service) *Service {
+	return &Service{repo: repo, dsService: dsService}
 }
 
 // CreateKey creates a new MCP API key and returns the plain key.
@@ -34,12 +37,25 @@ func (s *Service) CreateKey(ctx context.Context, orgID, userID uuid.UUID, req Cr
 		return nil, ErrKeyNameEmpty
 	}
 
+	// Validate at least one data source is selected
+	if len(req.DataSourceIDs) == 0 {
+		return nil, ErrNoDataSourcesSelected
+	}
+
+	// Validate all data sources belong to the organization
+	for _, dsID := range req.DataSourceIDs {
+		_, err := s.dsService.GetDataSource(ctx, orgID, dsID)
+		if err != nil {
+			return nil, ErrInvalidDataSource
+		}
+	}
+
 	plainKey, keyHash, err := generateAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate API key: %w", err)
 	}
 
-	key, err := s.repo.Create(ctx, orgID, name, keyHash, userID)
+	key, err := s.repo.Create(ctx, orgID, name, keyHash, userID, req.DataSourceIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MCP API key: %w", err)
 	}
@@ -82,6 +98,43 @@ func (s *Service) DeleteKey(ctx context.Context, orgID, keyID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+// UpdateKey updates the data sources for an MCP API key.
+func (s *Service) UpdateKey(ctx context.Context, orgID, keyID uuid.UUID, req UpdateKeyRequest) (*MCPAPIKey, error) {
+	// Validate at least one data source is selected
+	if len(req.DataSourceIDs) == 0 {
+		return nil, ErrNoDataSourcesSelected
+	}
+
+	// Get the key and verify ownership
+	key, err := s.repo.GetByID(ctx, keyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MCP API key: %w", err)
+	}
+	if key == nil {
+		return nil, ErrKeyNotFound
+	}
+	if key.OrganizationID != orgID {
+		return nil, ErrUnauthorized
+	}
+
+	// Validate all data sources belong to the organization
+	for _, dsID := range req.DataSourceIDs {
+		_, err := s.dsService.GetDataSource(ctx, orgID, dsID)
+		if err != nil {
+			return nil, ErrInvalidDataSource
+		}
+	}
+
+	// Update the data sources
+	if err := s.repo.UpdateDataSources(ctx, keyID, req.DataSourceIDs); err != nil {
+		return nil, fmt.Errorf("failed to update MCP API key: %w", err)
+	}
+
+	// Return the updated key
+	key.AllowedDataSourceIDs = req.DataSourceIDs
+	return key, nil
 }
 
 // ValidateKey validates an API key and returns the associated key record.
