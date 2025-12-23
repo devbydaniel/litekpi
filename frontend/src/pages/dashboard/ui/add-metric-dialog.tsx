@@ -5,7 +5,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/shared/components/ui/dialog'
-import { MetricForm } from '@/widgets/metric-form'
+import { MetricForm } from './metric-form'
 import type { CreateMetricRequest } from '@/shared/api/generated/models'
 
 interface AddMetricDialogProps {

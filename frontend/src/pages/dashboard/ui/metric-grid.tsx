@@ -1,5 +1,12 @@
 import { useState, useMemo } from 'react'
-import { MoreHorizontal, Trash, Pencil, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import {
+  MoreHorizontal,
+  Trash,
+  Pencil,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+} from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -35,9 +42,13 @@ import {
 } from '@/shared/components/ui/dialog'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import { cn } from '@/shared/lib/utils'
-import { MetricForm } from '@/widgets/metric-form'
+import { MetricForm } from './metric-form'
 import { DisplayMode } from '@/shared/api/generated/models'
-import type { ComputedMetric, Metric, UpdateMetricRequest } from '@/shared/api/generated/models'
+import type {
+  ComputedMetric,
+  Metric,
+  UpdateMetricRequest,
+} from '@/shared/api/generated/models'
 
 interface MetricGridProps {
   metrics: Metric[]
@@ -126,11 +137,17 @@ export function MetricGrid({
 
   // Separate scalar and time series metrics
   const scalarMetrics = useMemo(
-    () => computedMetrics.filter((m) => m.displayMode === DisplayMode.DisplayModeScalar),
+    () =>
+      computedMetrics.filter(
+        (m) => m.displayMode === DisplayMode.DisplayModeScalar
+      ),
     [computedMetrics]
   )
   const timeSeriesMetrics = useMemo(
-    () => computedMetrics.filter((m) => m.displayMode === DisplayMode.DisplayModeTimeSeries),
+    () =>
+      computedMetrics.filter(
+        (m) => m.displayMode === DisplayMode.DisplayModeTimeSeries
+      ),
     [computedMetrics]
   )
 
@@ -169,7 +186,9 @@ export function MetricGrid({
                 {canEdit && (
                   <MetricActions
                     onEdit={() => {
-                      const originalMetric = metrics.find((m) => m.id === metric.id)
+                      const originalMetric = metrics.find(
+                        (m) => m.id === metric.id
+                      )
                       if (originalMetric) setEditingMetric(originalMetric)
                     }}
                     onDelete={() => metric.id && onDelete(metric.id)}
@@ -198,8 +217,11 @@ export function MetricGrid({
         ))}
       </div>
 
-      <Dialog open={!!editingMetric} onOpenChange={(open) => !open && setEditingMetric(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <Dialog
+        open={!!editingMetric}
+        onOpenChange={(open) => !open && setEditingMetric(null)}
+      >
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Metric</DialogTitle>
           </DialogHeader>
@@ -224,7 +246,11 @@ interface MetricActionsProps {
   position?: 'corner' | 'header'
 }
 
-function MetricActions({ onEdit, onDelete, position = 'corner' }: MetricActionsProps) {
+function MetricActions({
+  onEdit,
+  onDelete,
+  position = 'corner',
+}: MetricActionsProps) {
   const positionClass =
     position === 'corner'
       ? 'absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100'
@@ -276,7 +302,9 @@ function ScalarMetricCard({ metric }: ScalarMetricCardProps) {
   return (
     <Card className="relative">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm text-muted-foreground">{metric.label}</CardTitle>
+        <CardTitle className="text-sm text-muted-foreground">
+          {metric.label}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-1">
@@ -351,7 +379,9 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
 
       return {
         data: Array.from(dateMap.values()).sort(
-          (a, b) => new Date(String(a.date)).getTime() - new Date(String(b.date)).getTime()
+          (a, b) =>
+            new Date(String(a.date)).getTime() -
+            new Date(String(b.date)).getTime()
         ),
         seriesKeys: keys,
       }
@@ -383,16 +413,20 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
       return (
         <div className="rounded-lg border bg-background p-2 shadow-sm">
           <div className="mb-1 text-xs text-muted-foreground">{label}</div>
-          {payload.map((item: { name?: string; value?: number; color?: string }) => (
-            <div key={item.name} className="flex items-center gap-2 text-sm">
-              <div
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="text-muted-foreground">{item.name}:</span>
-              <span className="font-medium">{item.value?.toLocaleString() ?? 0}</span>
-            </div>
-          ))}
+          {payload.map(
+            (item: { name?: string; value?: number; color?: string }) => (
+              <div key={item.name} className="flex items-center gap-2 text-sm">
+                <div
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-muted-foreground">{item.name}:</span>
+                <span className="font-medium">
+                  {item.value?.toLocaleString() ?? 0}
+                </span>
+              </div>
+            )
+          )}
         </div>
       )
     }
@@ -403,7 +437,9 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="font-medium">Value: {dataPoint.value?.toLocaleString()}</div>
+        <div className="font-medium">
+          Value: {dataPoint.value?.toLocaleString()}
+        </div>
       </div>
     )
   }
@@ -421,7 +457,11 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
       return (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={data} margin={chartMargin}>
-            <XAxis dataKey="date" {...commonAxisProps} tickFormatter={formatDate} />
+            <XAxis
+              dataKey="date"
+              {...commonAxisProps}
+              tickFormatter={formatDate}
+            />
             <YAxis {...commonAxisProps} tickFormatter={formatYAxis} />
             <Tooltip content={CustomTooltip} />
             {hasSplit && <Legend />}
@@ -454,7 +494,11 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
       return (
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data} margin={chartMargin}>
-            <XAxis dataKey="date" {...commonAxisProps} tickFormatter={formatDate} />
+            <XAxis
+              dataKey="date"
+              {...commonAxisProps}
+              tickFormatter={formatDate}
+            />
             <YAxis {...commonAxisProps} tickFormatter={formatYAxis} />
             <Tooltip content={CustomTooltip} />
             {hasSplit && <Legend />}
@@ -488,7 +532,11 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
     return (
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={chartMargin}>
-          <XAxis dataKey="date" {...commonAxisProps} tickFormatter={formatDate} />
+          <XAxis
+            dataKey="date"
+            {...commonAxisProps}
+            tickFormatter={formatDate}
+          />
           <YAxis {...commonAxisProps} tickFormatter={formatYAxis} />
           <Tooltip content={CustomTooltip} />
           {hasSplit && <Legend />}
@@ -499,11 +547,17 @@ function TimeSeriesMetricCard({ metric }: TimeSeriesMetricCardProps) {
                 dataKey={key}
                 stackId="1"
                 fill={getSeriesColor(i, key)}
-                radius={i === seriesKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                radius={
+                  i === seriesKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]
+                }
               />
             ))
           ) : (
-            <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            <Bar
+              dataKey="value"
+              fill="hsl(var(--primary))"
+              radius={[4, 4, 0, 0]}
+            />
           )}
         </BarChart>
       </ResponsiveContainer>

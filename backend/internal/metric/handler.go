@@ -159,7 +159,7 @@ func (h *Handler) CreateMetric(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, ErrInvalidGranularity) {
-			respondError(w, http.StatusBadRequest, "invalid granularity")
+			respondError(w, http.StatusBadRequest, "granularity is required for time_series display mode")
 			return
 		}
 		if errors.Is(err, ErrInvalidDisplayMode) {
@@ -272,7 +272,7 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, ErrInvalidGranularity) {
-			respondError(w, http.StatusBadRequest, "invalid granularity")
+			respondError(w, http.StatusBadRequest, "granularity is required for time_series display mode")
 			return
 		}
 		if errors.Is(err, ErrInvalidDisplayMode) {

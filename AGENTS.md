@@ -95,7 +95,7 @@ frontend/src/
 
 - `routes/` - Only routing logic (guards, param extraction). Import and render pages.
 - `layouts/` - Accept `children` prop. Independent from routes.
-- `widgets/` - Complex, self-contained UI blocks that combine multiple components and may have their own state/logic.
+- `widgets/` - Complex, self-contained UI blocks that combine multiple components and may have their own state/logic. Only place here if used by more than one page; otherwise keep in the page's `ui/` folder.
 - `pages/` - Import and wrap content with layouts. All page logic lives here.
 
 ### Libraries

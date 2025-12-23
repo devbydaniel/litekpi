@@ -80,11 +80,6 @@ func (s *Service) validateCreateRequest(ctx context.Context, orgID uuid.UUID, re
 		}
 	}
 
-	// Validate granularity
-	if !req.Granularity.IsValid() {
-		return ErrInvalidGranularity
-	}
-
 	// Validate display mode
 	if !req.DisplayMode.IsValid() {
 		return ErrInvalidDisplayMode
@@ -92,10 +87,15 @@ func (s *Service) validateCreateRequest(ctx context.Context, orgID uuid.UUID, re
 
 	// Validate display mode specific fields
 	if req.DisplayMode == DisplayModeTimeSeries {
+		// Granularity is required for time series
+		if req.Granularity == nil || !req.Granularity.IsValid() {
+			return ErrInvalidGranularity
+		}
 		if req.ChartType == nil || !req.ChartType.IsValid() {
 			return ErrChartTypeRequired
 		}
 	}
+	// For scalar, granularity should be nil (ignored if provided)
 
 	// Validate comparison display type if comparison is enabled
 	if req.ComparisonEnabled && req.ComparisonDisplayType != nil {
@@ -175,11 +175,6 @@ func (s *Service) Update(ctx context.Context, dashboardID, metricID uuid.UUID, r
 		}
 	}
 
-	// Validate granularity
-	if !req.Granularity.IsValid() {
-		return nil, ErrInvalidGranularity
-	}
-
 	// Validate display mode
 	if !req.DisplayMode.IsValid() {
 		return nil, ErrInvalidDisplayMode
@@ -187,10 +182,15 @@ func (s *Service) Update(ctx context.Context, dashboardID, metricID uuid.UUID, r
 
 	// Validate display mode specific fields
 	if req.DisplayMode == DisplayModeTimeSeries {
+		// Granularity is required for time series
+		if req.Granularity == nil || !req.Granularity.IsValid() {
+			return nil, ErrInvalidGranularity
+		}
 		if req.ChartType == nil || !req.ChartType.IsValid() {
 			return nil, ErrChartTypeRequired
 		}
 	}
+	// For scalar, granularity should be nil (ignored if provided)
 
 	// Validate comparison display type if comparison is enabled
 	if req.ComparisonEnabled && req.ComparisonDisplayType != nil {
@@ -309,42 +309,44 @@ func (s *Service) computeScalar(ctx context.Context, m Metric, start, end time.T
 func (s *Service) aggregateScalarValue(ctx context.Context, m Metric, start, end time.Time, filters map[string]string) (float64, error) {
 	switch m.Aggregation {
 	case AggregationCountUnique:
-		data, err := s.repo.GetCountUniqueMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, *m.AggregationKey, m.Granularity)
+		// Use scalar method - correctly counts unique values across entire timeframe
+		count, err := s.repo.GetScalarCountUnique(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, *m.AggregationKey)
 		if err != nil {
 			return 0, err
 		}
-		// For scalar display, we want total unique count across all periods
-		// But with count_unique, we need to be careful - summing unique counts across periods
-		// might double-count users who appear in multiple periods.
-		// For a single scalar value, we should query without granularity grouping.
-		// For now, sum them (this is approximate for scalar view)
-		var total float64
-		for _, dp := range data {
-			total += dp.Sum // Sum holds the unique count
-		}
-		return total, nil
+		return float64(count), nil
 
 	case AggregationCount:
-		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, m.Granularity)
+		_, count, err := s.repo.GetScalarAggregate(ctx, m.DataSourceID, m.MeasurementName, start, end, filters)
 		if err != nil {
 			return 0, err
 		}
-		var total int
-		for _, dp := range data {
-			total += dp.Count
-		}
-		return float64(total), nil
+		return float64(count), nil
 
-	default: // sum, average
-		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, m.Granularity)
+	case AggregationAverage:
+		sum, count, err := s.repo.GetScalarAggregate(ctx, m.DataSourceID, m.MeasurementName, start, end, filters)
 		if err != nil {
 			return 0, err
 		}
-		return aggregate(data, m.Aggregation), nil
+		if count == 0 {
+			return 0, nil
+		}
+		return sum / float64(count), nil
+
+	default: // sum
+		sum, _, err := s.repo.GetScalarAggregate(ctx, m.DataSourceID, m.MeasurementName, start, end, filters)
+		if err != nil {
+			return 0, err
+		}
+		return sum, nil
 	}
 }
 
 func (s *Service) computeTimeSeries(ctx context.Context, m Metric, start, end time.Time, filters map[string]string) (*ComputedMetric, error) {
+	if m.Granularity == nil {
+		return nil, fmt.Errorf("granularity is required for time series metrics")
+	}
+
 	computed := &ComputedMetric{Metric: m}
 
 	if m.SplitBy != nil && *m.SplitBy != "" {
@@ -365,9 +367,11 @@ func (s *Service) computeTimeSeries(ctx context.Context, m Metric, start, end ti
 }
 
 func (s *Service) getTimeSeriesData(ctx context.Context, m Metric, start, end time.Time, filters map[string]string) ([]DataPoint, error) {
+	granularity := *m.Granularity // Already validated in computeTimeSeries
+
 	switch m.Aggregation {
 	case AggregationCountUnique:
-		data, err := s.repo.GetCountUniqueMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, *m.AggregationKey, m.Granularity)
+		data, err := s.repo.GetCountUniqueMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, *m.AggregationKey, granularity)
 		if err != nil {
 			return nil, err
 		}
@@ -381,7 +385,7 @@ func (s *Service) getTimeSeriesData(ctx context.Context, m Metric, start, end ti
 		return dataPoints, nil
 
 	case AggregationCount:
-		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, m.Granularity)
+		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, granularity)
 		if err != nil {
 			return nil, err
 		}
@@ -395,7 +399,7 @@ func (s *Service) getTimeSeriesData(ctx context.Context, m Metric, start, end ti
 		return dataPoints, nil
 
 	case AggregationAverage:
-		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, m.Granularity)
+		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, granularity)
 		if err != nil {
 			return nil, err
 		}
@@ -413,7 +417,7 @@ func (s *Service) getTimeSeriesData(ctx context.Context, m Metric, start, end ti
 		return dataPoints, nil
 
 	default: // sum
-		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, m.Granularity)
+		data, err := s.repo.GetAggregatedMeasurements(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, granularity)
 		if err != nil {
 			return nil, err
 		}
@@ -429,6 +433,8 @@ func (s *Service) getTimeSeriesData(ctx context.Context, m Metric, start, end ti
 }
 
 func (s *Service) getTimeSeriesSplitBy(ctx context.Context, m Metric, start, end time.Time, filters map[string]string) ([]SplitSeries, error) {
+	granularity := *m.Granularity // Already validated in computeTimeSeries
+
 	// Note: count_unique with split_by would require different query logic
 	// For now, we only support sum/average/count with split_by
 	if m.Aggregation == AggregationCountUnique {
@@ -440,7 +446,7 @@ func (s *Service) getTimeSeriesSplitBy(ctx context.Context, m Metric, start, end
 		return []SplitSeries{{Key: "total", DataPoints: dataPoints}}, nil
 	}
 
-	series, err := s.repo.GetAggregatedMeasurementsSplitBy(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, *m.SplitBy, m.Granularity)
+	series, err := s.repo.GetAggregatedMeasurementsSplitBy(ctx, m.DataSourceID, m.MeasurementName, start, end, filters, *m.SplitBy, granularity)
 	if err != nil {
 		return nil, err
 	}
@@ -450,29 +456,6 @@ func (s *Service) getTimeSeriesSplitBy(ctx context.Context, m Metric, start, end
 }
 
 // Helper functions
-
-func aggregate(data []AggregatedDataPoint, aggregationType Aggregation) float64 {
-	if len(data) == 0 {
-		return 0
-	}
-
-	var totalSum float64
-	var totalCount int
-	for _, dp := range data {
-		totalSum += dp.Sum
-		totalCount += dp.Count
-	}
-
-	switch aggregationType {
-	case AggregationAverage:
-		if totalCount == 0 {
-			return 0
-		}
-		return totalSum / float64(totalCount)
-	default: // AggregationSum
-		return totalSum
-	}
-}
 
 func getTimeframeRange(timeframe string, dateFrom, dateTo *time.Time) (start, end time.Time) {
 	now := time.Now().UTC()

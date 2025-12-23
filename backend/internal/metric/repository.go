@@ -76,7 +76,8 @@ func (r *Repository) Create(ctx context.Context, dashboardID, dataSourceID uuid.
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Metric, error) {
 	m := &Metric{}
 	var filtersJSON []byte
-	var aggregation, granularity, displayMode string
+	var aggregation, displayMode string
+	var granularity *string
 	var comparisonDisplayType, chartType *string
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, dashboard_id, data_source_id, label, measurement_name, timeframe, date_from, date_to, filters, aggregation, aggregation_key, granularity, display_mode, comparison_enabled, comparison_display_type, chart_type, split_by, position, created_at, updated_at
@@ -92,7 +93,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Metric, error)
 	}
 
 	m.Aggregation = Aggregation(aggregation)
-	m.Granularity = Granularity(granularity)
+	if granularity != nil {
+		g := Granularity(*granularity)
+		m.Granularity = &g
+	}
 	m.DisplayMode = DisplayMode(displayMode)
 	if comparisonDisplayType != nil {
 		cdt := ComparisonDisplayType(*comparisonDisplayType)
@@ -127,13 +131,17 @@ func (r *Repository) GetByDashboardID(ctx context.Context, dashboardID uuid.UUID
 	for rows.Next() {
 		var m Metric
 		var filtersJSON []byte
-		var aggregation, granularity, displayMode string
+		var aggregation, displayMode string
+		var granularity *string
 		var comparisonDisplayType, chartType *string
 		if err := rows.Scan(&m.ID, &m.DashboardID, &m.DataSourceID, &m.Label, &m.MeasurementName, &m.Timeframe, &m.DateFrom, &m.DateTo, &filtersJSON, &aggregation, &m.AggregationKey, &granularity, &displayMode, &m.ComparisonEnabled, &comparisonDisplayType, &chartType, &m.SplitBy, &m.Position, &m.CreatedAt, &m.UpdatedAt); err != nil {
 			return nil, err
 		}
 		m.Aggregation = Aggregation(aggregation)
-		m.Granularity = Granularity(granularity)
+		if granularity != nil {
+			g := Granularity(*granularity)
+			m.Granularity = &g
+		}
 		m.DisplayMode = DisplayMode(displayMode)
 		if comparisonDisplayType != nil {
 			cdt := ComparisonDisplayType(*comparisonDisplayType)
@@ -429,4 +437,58 @@ func formatDateByGranularity(t time.Time, g Granularity) string {
 	default: // daily
 		return t.Format("2006-01-02")
 	}
+}
+
+// Scalar aggregation queries - no granularity/grouping, returns single aggregate
+
+// GetScalarAggregate returns the sum and count for the entire timeframe without grouping.
+func (r *Repository) GetScalarAggregate(ctx context.Context, dataSourceID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string) (sum float64, count int, err error) {
+	query := `SELECT COALESCE(SUM(value), 0), COUNT(*)
+	FROM measurements
+	WHERE data_source_id = $1 AND name = $2 AND timestamp >= $3 AND timestamp < $4`
+
+	args := []interface{}{dataSourceID, name, startDate, endDate}
+
+	if len(metadataFilters) > 0 {
+		filterJSON, err := json.Marshal(metadataFilters)
+		if err != nil {
+			return 0, 0, err
+		}
+		query += ` AND metadata @> $5`
+		args = append(args, filterJSON)
+	}
+
+	err = r.pool.QueryRow(ctx, query, args...).Scan(&sum, &count)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return sum, count, nil
+}
+
+// GetScalarCountUnique returns the unique count for the entire timeframe without grouping.
+func (r *Repository) GetScalarCountUnique(ctx context.Context, dataSourceID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, aggregationKey string) (int, error) {
+	query := `SELECT COUNT(DISTINCT metadata->>$5)
+	FROM measurements
+	WHERE data_source_id = $1 AND name = $2 AND timestamp >= $3 AND timestamp < $4
+	  AND metadata ? $5`
+
+	args := []interface{}{dataSourceID, name, startDate, endDate, aggregationKey}
+
+	if len(metadataFilters) > 0 {
+		filterJSON, err := json.Marshal(metadataFilters)
+		if err != nil {
+			return 0, err
+		}
+		query += ` AND metadata @> $6`
+		args = append(args, filterJSON)
+	}
+
+	var count int
+	err := r.pool.QueryRow(ctx, query, args...).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }

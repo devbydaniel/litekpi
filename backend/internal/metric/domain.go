@@ -16,7 +16,7 @@ var (
 	ErrMeasurementNameEmpty   = errors.New("measurement name is required")
 	ErrInvalidTimeframe       = errors.New("invalid timeframe")
 	ErrInvalidAggregation     = errors.New("invalid aggregation type")
-	ErrInvalidGranularity     = errors.New("invalid granularity")
+	ErrInvalidGranularity     = errors.New("granularity is required for time_series display mode")
 	ErrInvalidDisplayMode     = errors.New("invalid display mode")
 	ErrInvalidChartType       = errors.New("invalid chart type")
 	ErrInvalidComparisonType  = errors.New("invalid comparison display type")
@@ -154,9 +154,9 @@ type Metric struct {
 	Filters         []Filter   `json:"filters"`
 
 	// Aggregation
-	Aggregation    Aggregation `json:"aggregation"`
-	AggregationKey *string     `json:"aggregationKey,omitempty"` // Required for count_unique
-	Granularity    Granularity `json:"granularity"`
+	Aggregation    Aggregation  `json:"aggregation"`
+	AggregationKey *string      `json:"aggregationKey,omitempty"` // Required for count_unique
+	Granularity    *Granularity `json:"granularity,omitempty"`    // Required for time_series only
 
 	// Display mode
 	DisplayMode DisplayMode `json:"displayMode"`
@@ -217,10 +217,10 @@ type CreateMetricRequest struct {
 	DateFrom        *time.Time  `json:"dateFrom,omitempty"`
 	DateTo          *time.Time  `json:"dateTo,omitempty"`
 	Filters         []Filter    `json:"filters,omitempty"`
-	Aggregation     Aggregation `json:"aggregation"`
-	AggregationKey  *string     `json:"aggregationKey,omitempty"`
-	Granularity     Granularity `json:"granularity"`
-	DisplayMode     DisplayMode `json:"displayMode"`
+	Aggregation     Aggregation  `json:"aggregation"`
+	AggregationKey  *string      `json:"aggregationKey,omitempty"`
+	Granularity     *Granularity `json:"granularity,omitempty"` // Required for time_series only
+	DisplayMode     DisplayMode  `json:"displayMode"`
 
 	// Scalar options
 	ComparisonEnabled     bool                   `json:"comparisonEnabled"`
@@ -238,10 +238,10 @@ type UpdateMetricRequest struct {
 	DateFrom        *time.Time  `json:"dateFrom,omitempty"`
 	DateTo          *time.Time  `json:"dateTo,omitempty"`
 	Filters         []Filter    `json:"filters,omitempty"`
-	Aggregation     Aggregation `json:"aggregation"`
-	AggregationKey  *string     `json:"aggregationKey,omitempty"`
-	Granularity     Granularity `json:"granularity"`
-	DisplayMode     DisplayMode `json:"displayMode"`
+	Aggregation     Aggregation  `json:"aggregation"`
+	AggregationKey  *string      `json:"aggregationKey,omitempty"`
+	Granularity     *Granularity `json:"granularity,omitempty"` // Required for time_series only
+	DisplayMode     DisplayMode  `json:"displayMode"`
 
 	// Scalar options
 	ComparisonEnabled     bool                   `json:"comparisonEnabled"`
