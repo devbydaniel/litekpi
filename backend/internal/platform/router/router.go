@@ -15,6 +15,7 @@ import (
 	"github.com/devbydaniel/litekpi/internal/datasource"
 	"github.com/devbydaniel/litekpi/internal/demo"
 	"github.com/devbydaniel/litekpi/internal/ingest"
+	"github.com/devbydaniel/litekpi/internal/mcp"
 	"github.com/devbydaniel/litekpi/internal/metric"
 	"github.com/devbydaniel/litekpi/internal/platform/config"
 	"github.com/devbydaniel/litekpi/internal/platform/database"
@@ -82,6 +83,12 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 	demoService := demo.NewService(dsService, ingestService)
 	demoHandler := demo.NewHandler(demoService)
 
+	// Initialize MCP module
+	mcpRepo := mcp.NewRepository(db.Pool)
+	mcpService := mcp.NewService(mcpRepo)
+	mcpHandler := mcp.NewHandler(mcpService)
+	mcpServerFactory := mcp.NewServerFactory(dsService, ingestService)
+
 	// Health check endpoint
 	r.Get("/health", healthHandler(db))
 
@@ -120,6 +127,12 @@ func New(db *database.DB, cfg *config.Config) *chi.Mux {
 
 		// Register measurement query routes (uses JWT auth)
 		ingestHandler.RegisterMeasurementRoutes(r, authService.Middleware)
+
+		// Register MCP key management routes (uses JWT auth, admin only)
+		mcpHandler.RegisterRoutes(r, authService.Middleware)
+
+		// Register MCP protocol routes (uses MCP API key auth)
+		mcpHandler.RegisterMCPProtocolRoutes(r, mcpServerFactory.MCPHTTPHandler())
 	})
 
 	return r

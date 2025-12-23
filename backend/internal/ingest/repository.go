@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -264,6 +265,63 @@ func (r *Repository) GetAggregatedMeasurements(ctx context.Context, dataSourceID
 	}
 
 	return dataPoints, nil
+}
+
+// GetRawMeasurements retrieves raw measurement data points with optional metadata filtering.
+func (r *Repository) GetRawMeasurements(ctx context.Context, dataSourceID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, limit int) ([]Measurement, error) {
+	query := `SELECT id, data_source_id, name, value, timestamp, metadata, created_at
+		FROM measurements
+		WHERE data_source_id = $1 AND name = $2 AND timestamp >= $3 AND timestamp < $4`
+
+	args := []interface{}{dataSourceID, name, startDate, endDate}
+
+	// Add metadata filters using JSONB containment operator
+	if len(metadataFilters) > 0 {
+		filterJSON, err := json.Marshal(metadataFilters)
+		if err != nil {
+			return nil, err
+		}
+		query += ` AND metadata @> $5`
+		args = append(args, filterJSON)
+	}
+
+	query += ` ORDER BY timestamp DESC`
+
+	if limit > 0 {
+		query += fmt.Sprintf(` LIMIT %d`, limit)
+	}
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var measurements []Measurement
+	for rows.Next() {
+		var m Measurement
+		var metadataJSON []byte
+		if err := rows.Scan(&m.ID, &m.DataSourceID, &m.Name, &m.Value, &m.Timestamp, &metadataJSON, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		if metadataJSON != nil {
+			if err := json.Unmarshal(metadataJSON, &m.Metadata); err != nil {
+				// Skip invalid metadata
+				m.Metadata = nil
+			}
+		}
+		measurements = append(measurements, m)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if measurements == nil {
+		measurements = []Measurement{}
+	}
+
+	return measurements, nil
 }
 
 // GetAggregatedMeasurementsSplitBy retrieves daily aggregated values split by a metadata key.

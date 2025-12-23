@@ -253,6 +253,11 @@ func (s *Service) GetAggregatedMeasurements(ctx context.Context, dataSourceID uu
 	return s.repo.GetAggregatedMeasurements(ctx, dataSourceID, name, startDate, endDate, metadataFilters)
 }
 
+// GetRawMeasurements retrieves raw measurement data points with optional metadata filtering.
+func (s *Service) GetRawMeasurements(ctx context.Context, dataSourceID uuid.UUID, name string, startDate, endDate time.Time, metadataFilters map[string]string, limit int) ([]Measurement, error) {
+	return s.repo.GetRawMeasurements(ctx, dataSourceID, name, startDate, endDate, metadataFilters, limit)
+}
+
 // maxSplitSeries is the maximum number of distinct series to return before grouping into "Other".
 const maxSplitSeries = 10
 
