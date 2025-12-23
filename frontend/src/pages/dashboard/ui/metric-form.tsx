@@ -303,8 +303,12 @@ export function MetricForm({
                     </FormControl>
                     <SelectContent>
                       {AGGREGATION_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          <div className="flex flex-col">
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value}
+                          textValue={opt.label}
+                        >
+                          <div className="flex flex-col items-start">
                             <span>{opt.label}</span>
                             <span className="text-xs text-muted-foreground">
                               {opt.description}
