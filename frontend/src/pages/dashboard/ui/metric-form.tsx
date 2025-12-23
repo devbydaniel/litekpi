@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, X, Hash, TrendingUp } from 'lucide-react'
+import { Check, X, Hash, TrendingUp, ChevronRight } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
@@ -100,6 +100,8 @@ export function MetricForm({
   const { form, dataSources, measurements, metadata, isEditing } =
     useMetricForm({ initialValues })
 
+  const [step, setStep] = useState<1 | 2>(1)
+
   // Watch fields needed for conditional rendering
   const displayMode = form.watch('displayMode')
   const aggregation = form.watch('aggregation')
@@ -107,6 +109,20 @@ export function MetricForm({
   const measurementName = form.watch('measurementName')
   const dataSourceId = form.watch('dataSourceId')
   const filters = form.watch('filters')
+
+  const handleNextStep = async (e?: React.MouseEvent) => {
+    e?.preventDefault()
+    const fieldsToValidate: Array<
+      'dataSourceId' | 'measurementName' | 'aggregation' | 'aggregationKey'
+    > = ['dataSourceId', 'measurementName', 'aggregation']
+    if (aggregation === 'count_unique') {
+      fieldsToValidate.push('aggregationKey')
+    }
+    const isValid = await form.trigger(fieldsToValidate)
+    if (isValid) {
+      setStep(2)
+    }
+  }
 
   const handleFormSubmit = async (values: MetricFormValues) => {
     await onSubmit(formValuesToRequest(values))
@@ -137,242 +153,70 @@ export function MetricForm({
         onSubmit={form.handleSubmit(handleFormSubmit)}
         className="space-y-4"
       >
-        {/* Data Source */}
-        <FormField
-          control={form.control}
-          name="dataSourceId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Data Source</FormLabel>
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={isEditing}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select data source" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {dataSources.map((ds) => (
-                    <SelectItem key={ds.id} value={ds.id ?? ''}>
-                      {ds.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Measurement */}
-        <FormField
-          control={form.control}
-          name="measurementName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Measurement</FormLabel>
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={!dataSourceId || measurements.length === 0 || isEditing}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        !dataSourceId
-                          ? 'Select a data source first'
-                          : measurements.length === 0
-                            ? 'No measurements available'
-                            : 'Select measurement'
-                      }
-                    />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {measurements.map((m) => (
-                    <SelectItem key={m.name} value={m.name ?? ''}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Label */}
-        <FormField
-          control={form.control}
-          name="label"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Label</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder={measurementName || 'Enter a label'}
-                  maxLength={255}
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                Defaults to measurement name if left empty
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Aggregation */}
-        <FormField
-          control={form.control}
-          name="aggregation"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Aggregation</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {AGGREGATION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <div className="flex flex-col">
-                        <span>{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {opt.description}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Aggregation Key (for count_unique) */}
-        {aggregation === 'count_unique' && (
-          <FormField
-            control={form.control}
-            name="aggregationKey"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>
-                  Count Unique Field <span className="text-destructive">*</span>
-                </FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={metadata.keys.length === 0}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          metadata.keys.length === 0
-                            ? 'No metadata fields available'
-                            : 'Select field to count unique values'
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {metadata.keys.map((key) => (
-                      <SelectItem key={key} value={key}>
-                        {key}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  The metadata field to count unique values of (e.g., user_id
-                  for MAU)
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
+        {/* Stepper Header */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            className={cn(
+              'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+              step === 1
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
             )}
-          />
-        )}
+          >
+            {step > 1 ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <span className="flex h-4 w-4 items-center justify-center text-xs">
+                1
+              </span>
+            )}
+            Metric Config
+          </button>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <button
+            type="button"
+            onClick={() => step === 1 && handleNextStep()}
+            disabled={step === 1}
+            className={cn(
+              'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+              step === 2
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            )}
+          >
+            <span className="flex h-4 w-4 items-center justify-center text-xs">
+              2
+            </span>
+            Display
+          </button>
+        </div>
 
-        {/* Display Mode */}
-        <FormField
-          control={form.control}
-          name="displayMode"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Display Mode</FormLabel>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  className={cn(
-                    'flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors',
-                    field.value === 'scalar'
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-muted-foreground'
-                  )}
-                  onClick={() => field.onChange('scalar')}
-                >
-                  <Hash className="h-5 w-5" />
-                  <div className="text-center">
-                    <div className="text-sm font-medium">Scalar</div>
-                    <div className="text-xs text-muted-foreground">
-                      Single value
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors',
-                    field.value === 'time_series'
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-muted-foreground'
-                  )}
-                  onClick={() => field.onChange('time_series')}
-                >
-                  <TrendingUp className="h-5 w-5" />
-                  <div className="text-center">
-                    <div className="text-sm font-medium">Time Series</div>
-                    <div className="text-xs text-muted-foreground">
-                      Chart over time
-                    </div>
-                  </div>
-                </button>
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Scalar-specific options */}
-        {displayMode === 'scalar' && (
-          <div className="space-y-4 rounded-lg border p-4">
-            <h4 className="text-sm font-medium">Scalar Options</h4>
-
+        {/* Step 1: Metric Config */}
+        {step === 1 && (
+          <div className="space-y-4">
+            {/* Data Source */}
             <FormField
               control={form.control}
-              name="timeframe"
+              name="dataSourceId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Timeframe</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <FormLabel>Data Source</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={isEditing}
+                  >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Select data source" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {TIMEFRAME_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {dataSources.map((ds) => (
+                        <SelectItem key={ds.id} value={ds.id ?? ''}>
+                          {ds.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -382,98 +226,75 @@ export function MetricForm({
               )}
             />
 
+            {/* Measurement */}
             <FormField
               control={form.control}
-              name="comparisonEnabled"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <FormLabel>Compare to previous period</FormLabel>
-                    <FormDescription>
-                      Show change from the previous period
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {comparisonEnabled && (
-              <FormField
-                control={form.control}
-                name="comparisonDisplayType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Comparison display</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {COMPARISON_DISPLAY_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Time series-specific options */}
-        {displayMode === 'time_series' && (
-          <div className="space-y-4 rounded-lg border p-4">
-            <h4 className="text-sm font-medium">Time Series Options</h4>
-
-            <FormField
-              control={form.control}
-              name="granularity"
+              name="measurementName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Granularity</FormLabel>
+                  <FormLabel>Measurement</FormLabel>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
+                    disabled={
+                      !dataSourceId || measurements.length === 0 || isEditing
+                    }
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue
+                          placeholder={
+                            !dataSourceId
+                              ? 'Select a data source first'
+                              : measurements.length === 0
+                                ? 'No measurements available'
+                                : 'Select measurement'
+                          }
+                        />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {GRANULARITY_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {measurements.map((m) => (
+                        <SelectItem key={m.name} value={m.name ?? ''}>
+                          {m.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Label */}
+            <FormField
+              control={form.control}
+              name="label"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Label</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={measurementName || 'Enter a label'}
+                      maxLength={255}
+                      {...field}
+                    />
+                  </FormControl>
                   <FormDescription>
-                    How data points are grouped on the chart
+                    Defaults to measurement name if left empty
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Aggregation */}
             <FormField
               control={form.control}
-              name="chartType"
+              name="aggregation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Chart Type</FormLabel>
+                  <FormLabel>Aggregation</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -481,9 +302,14 @@ export function MetricForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {CHART_TYPE_OPTIONS.map((opt) => (
+                      {AGGREGATION_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                          <div className="flex flex-col">
+                            <span>{opt.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {opt.description}
+                            </span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -493,26 +319,34 @@ export function MetricForm({
               )}
             />
 
-            {metadata.keys.length > 0 && (
+            {/* Aggregation Key (for count_unique) */}
+            {aggregation === 'count_unique' && (
               <FormField
                 control={form.control}
-                name="splitBy"
+                name="aggregationKey"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Split By (optional)</FormLabel>
+                    <FormLabel>
+                      Count Unique Field{' '}
+                      <span className="text-destructive">*</span>
+                    </FormLabel>
                     <Select
-                      value={field.value || '__none__'}
-                      onValueChange={(v) =>
-                        field.onChange(v === '__none__' ? '' : v)
-                      }
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={metadata.keys.length === 0}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="No split" />
+                          <SelectValue
+                            placeholder={
+                              metadata.keys.length === 0
+                                ? 'No metadata fields available'
+                                : 'Select field to count unique values'
+                            }
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="__none__">No split</SelectItem>
                         {metadata.keys.map((key) => (
                           <SelectItem key={key} value={key}>
                             {key}
@@ -520,45 +354,307 @@ export function MetricForm({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormDescription>
+                      The metadata field to count unique values of (e.g.,
+                      user_id for MAU)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             )}
+
+            {/* Filters */}
+            {metadata.keys.length > 0 && (
+              <div className="space-y-2">
+                <Label>Filters</Label>
+                <div className="grid gap-3 rounded-lg border p-3">
+                  {metadata.keys.map((key) => (
+                    <FilterSelect
+                      key={key}
+                      filterKey={key}
+                      values={metadata.values[key] ?? []}
+                      selectedValue={filters.find((f) => f.key === key)?.value}
+                      onValueChange={(value) => handleFilterChange(key, value)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Filters */}
-        {metadata.keys.length > 0 && (
-          <div className="space-y-2">
-            <Label>Filters</Label>
-            <div className="grid gap-3 rounded-lg border p-3">
-              {metadata.keys.map((key) => (
-                <FilterSelect
-                  key={key}
-                  filterKey={key}
-                  values={metadata.values[key] ?? []}
-                  selectedValue={filters.find((f) => f.key === key)?.value}
-                  onValueChange={(value) => handleFilterChange(key, value)}
+        {/* Step 2: Display Config */}
+        {step === 2 && (
+          <div className="space-y-4">
+            {/* Display Mode */}
+            <FormField
+              control={form.control}
+              name="displayMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Display Mode</FormLabel>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors',
+                        field.value === 'scalar'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-muted-foreground'
+                      )}
+                      onClick={() => field.onChange('scalar')}
+                    >
+                      <Hash className="h-5 w-5" />
+                      <div className="text-center">
+                        <div className="text-sm font-medium">Scalar</div>
+                        <div className="text-xs text-muted-foreground">
+                          Single value
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors',
+                        field.value === 'time_series'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-muted-foreground'
+                      )}
+                      onClick={() => field.onChange('time_series')}
+                    >
+                      <TrendingUp className="h-5 w-5" />
+                      <div className="text-center">
+                        <div className="text-sm font-medium">Time Series</div>
+                        <div className="text-xs text-muted-foreground">
+                          Chart over time
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Scalar-specific options */}
+            {displayMode === 'scalar' && (
+              <div className="space-y-4 rounded-lg border p-4">
+                <h4 className="text-sm font-medium">Scalar Options</h4>
+
+                <FormField
+                  control={form.control}
+                  name="timeframe"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Timeframe</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TIMEFRAME_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              ))}
-            </div>
+
+                <FormField
+                  control={form.control}
+                  name="comparisonEnabled"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <FormLabel>Compare to previous period</FormLabel>
+                        <FormDescription>
+                          Show change from the previous period
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {comparisonEnabled && (
+                  <FormField
+                    control={form.control}
+                    name="comparisonDisplayType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Comparison display</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {COMPARISON_DISPLAY_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Time series-specific options */}
+            {displayMode === 'time_series' && (
+              <div className="space-y-4 rounded-lg border p-4">
+                <h4 className="text-sm font-medium">Time Series Options</h4>
+
+                <FormField
+                  control={form.control}
+                  name="granularity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Granularity</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {GRANULARITY_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        How data points are grouped on the chart
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="chartType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Chart Type</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CHART_TYPE_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {metadata.keys.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="splitBy"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Split By (optional)</FormLabel>
+                        <Select
+                          value={field.value || '__none__'}
+                          onValueChange={(v) =>
+                            field.onChange(v === '__none__' ? '' : v)
+                          }
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="No split" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="__none__">No split</SelectItem>
+                            {metadata.keys.map((key) => (
+                              <SelectItem key={key} value={key}>
+                                {key}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Saving...' : submitLabel}
-          </Button>
+          {step === 1 ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleNextStep}>
+                Next
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep(1)}
+                disabled={isLoading}
+              >
+                Back
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? 'Saving...' : submitLabel}
+              </Button>
+            </>
+          )}
         </div>
       </form>
     </Form>
