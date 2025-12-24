@@ -24,7 +24,7 @@ type ListDataSourcesOutput struct {
 
 // ListMeasurementsInput is the input for list_measurements tool.
 type ListMeasurementsInput struct {
-	DataSourceID string `json:"dataSourceId" jsonschema:"description=The ID of the data source to query"`
+	DataSourceID string `json:"dataSourceId"`
 }
 
 // MeasurementOutput represents a measurement in tool output.

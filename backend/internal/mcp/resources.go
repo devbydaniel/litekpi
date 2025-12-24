@@ -1,10 +1,13 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,13 +41,15 @@ func NewResourceRegistry(dsService *datasource.Service, ingestService *ingest.Se
 
 // RegisterResources registers all MCP resources with the server.
 func (r *ResourceRegistry) RegisterResources(server *mcp.Server, getMCPKey func(ctx context.Context) *MCPAPIKey) {
-	// Resource template: litekpi://measurements/{dataSourceId}/{measurementName}?timeframe={timeframe}
+	// Resource template: litekpi://measurements/{dataSourceId}/{measurementName}{?timeframe,metadata}
 	server.AddResourceTemplate(
 		&mcp.ResourceTemplate{
-			URITemplate: "litekpi://measurements/{dataSourceId}/{measurementName}",
-			Name:        "Measurement Data",
-			Description: "Raw measurement data points. Supports timeframe query parameter: last_7_days, last_30_days, this_month, last_month (default: last_30_days)",
-			MIMEType:    "application/json",
+			URITemplate: "litekpi://measurements/{dataSourceId}/{measurementName}{?timeframe,metadata}",
+			Name:        "measurement_data",
+			Description: `Raw measurement data points as CSV. Query parameters:
+- timeframe: last_7_days, last_30_days, this_month, last_month (default: last_30_days)
+- metadata: URL-encoded JSON object to filter by metadata, e.g. %7B%22region%22%3A%22eu%22%7D for {"region":"eu"}`,
+			MIMEType: "text/csv",
 		},
 		func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 			mcpKey := getMCPKey(ctx)
@@ -84,40 +89,69 @@ func (r *ResourceRegistry) RegisterResources(server *mcp.Server, getMCPKey func(
 			}
 
 			// Parse timeframe from query params
-			timeframe := parsedURI.Query().Get("timeframe")
+			query := parsedURI.Query()
+			timeframe := query.Get("timeframe")
 			if timeframe == "" {
 				timeframe = "last_30_days"
+			}
+
+			// Parse metadata filter from query params (JSON-encoded)
+			var metadataFilter map[string]string
+			if metadataJSON := query.Get("metadata"); metadataJSON != "" {
+				if err := json.Unmarshal([]byte(metadataJSON), &metadataFilter); err != nil {
+					return nil, fmt.Errorf("invalid metadata JSON: %w", err)
+				}
 			}
 
 			start, end := getTimeframeRange(timeframe)
 
 			// Fetch raw measurements (limit to 1000 points)
-			measurements, err := r.ingestService.GetRawMeasurements(ctx, ds.ID, measurementName, start, end, nil, 1000)
+			measurements, err := r.ingestService.GetRawMeasurements(ctx, ds.ID, measurementName, start, end, metadataFilter, 1000)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch measurements: %w", err)
 			}
 
-			// Convert to output format
-			dataPoints := make([]RawDataPoint, len(measurements))
-			for i, m := range measurements {
-				dataPoints[i] = RawDataPoint{
-					Timestamp: m.Timestamp,
-					Value:     m.Value,
-					Metadata:  m.Metadata,
+			// Collect all unique metadata keys
+			metaKeys := make(map[string]struct{})
+			for _, m := range measurements {
+				for k := range m.Metadata {
+					metaKeys[k] = struct{}{}
 				}
 			}
 
-			// Serialize to JSON
-			content, err := json.Marshal(dataPoints)
-			if err != nil {
-				return nil, fmt.Errorf("failed to serialize data: %w", err)
+			// Sort metadata keys for consistent column order
+			sortedMetaKeys := make([]string, 0, len(metaKeys))
+			for k := range metaKeys {
+				sortedMetaKeys = append(sortedMetaKeys, k)
 			}
+			sort.Strings(sortedMetaKeys)
+
+			// Build CSV string
+			var buf bytes.Buffer
+			w := csv.NewWriter(&buf)
+
+			// Write header: timestamp, value, [metadata columns...]
+			header := append([]string{"timestamp", "value"}, sortedMetaKeys...)
+			w.Write(header)
+
+			// Write data rows
+			for _, m := range measurements {
+				row := []string{
+					m.Timestamp.Format(time.RFC3339),
+					fmt.Sprintf("%g", m.Value),
+				}
+				for _, k := range sortedMetaKeys {
+					row = append(row, m.Metadata[k])
+				}
+				w.Write(row)
+			}
+			w.Flush()
 
 			return &mcp.ReadResourceResult{
 				Contents: []*mcp.ResourceContents{{
 					URI:      req.Params.URI,
-					MIMEType: "application/json",
-					Text:     string(content),
+					MIMEType: "text/csv",
+					Text:     buf.String(),
 				}},
 			}, nil
 		},
