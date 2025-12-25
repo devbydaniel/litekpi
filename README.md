@@ -301,6 +301,73 @@ curl -X POST https://api.kpi.example.com/api/v1/ingest \
    - Split by metadata key (e.g., see users by plan)
    - Filter by metadata values
 
+## MCP Integration
+
+LiteKPI supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for AI agent integration. This allows LLMs to query your metrics data directly.
+
+### MCP Server URL
+
+| Environment | URL |
+|-------------|-----|
+| Local development | `http://localhost:8080/api/v1/mcp` |
+| Docker (same network) | `http://backend:8080/api/v1/mcp` |
+| Docker (from host) | `http://host.docker.internal:8080/api/v1/mcp` |
+| Production | `https://api.kpi.example.com/api/v1/mcp` |
+
+### Creating an MCP API Key
+
+1. Log in as an admin user
+2. Go to **Settings** → **MCP API Keys**
+3. Click **Create Key** and select which data sources the key can access
+4. Copy the generated API key
+
+### Authentication
+
+MCP clients must include the API key in the `X-API-Key` header:
+
+```
+X-API-Key: your-mcp-api-key
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_data_sources` | List all data sources accessible by this API key |
+| `list_measurements` | List available measurement names and metadata keys for a data source |
+
+### Available Resources
+
+| Resource | Description |
+|----------|-------------|
+| `litekpi://measurements/{dataSourceId}/{measurementName}` | Raw measurement data as CSV |
+
+**Query Parameters:**
+- `timeframe` - `last_7_days`, `last_30_days`, `this_month`, `last_month` (default: `last_30_days`)
+- `metadata` - URL-encoded JSON object for filtering, e.g., `%7B%22region%22%3A%22eu%22%7D` for `{"region":"eu"}`
+
+**Example URI:**
+```
+litekpi://measurements/550e8400-e29b-41d4-a716-446655440000/daily_active_users?timeframe=last_7_days
+```
+
+### MCP Client Configuration
+
+Example configuration for Claude Desktop or other MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "litekpi": {
+      "url": "https://api.kpi.example.com/api/v1/mcp",
+      "headers": {
+        "X-API-Key": "your-mcp-api-key"
+      }
+    }
+  }
+}
+```
+
 ## Production Deployment
 
 ### Using a Reverse Proxy (Recommended)
