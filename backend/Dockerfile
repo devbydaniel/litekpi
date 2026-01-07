@@ -16,6 +16,9 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Generate Swagger docs
+RUN go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs --parseDependency
+
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
