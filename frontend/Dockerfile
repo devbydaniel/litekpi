@@ -6,7 +6,7 @@ COPY backend/go.mod backend/go.sum* ./backend/
 RUN cd backend && go mod download
 
 COPY backend/ ./backend/
-RUN cd backend && go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs --parseDependency
+RUN cd backend && go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs --parseDependency --st
 
 # Stage 2: Build frontend
 FROM node:20-alpine AS builder
@@ -28,8 +28,11 @@ COPY frontend/ .
 # Update orval config to use local swagger.json
 RUN sed -i "s|../backend/docs/swagger.json|./swagger.json|g" orval.config.ts
 
-# Generate API client and route tree
+# Generate API client
 RUN npm run generate:api
+
+# Generate route tree (needed before tsc)
+RUN npx @tanstack/router-cli generate
 
 # Build the application
 RUN npm run build
